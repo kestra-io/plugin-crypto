@@ -1,13 +1,12 @@
 package org.kestra.task.crypto.openpgp;
 
 import com.devskiller.friendly_id.FriendlyId;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
-import io.micronaut.context.ApplicationContext;
 import io.micronaut.test.annotation.MicronautTest;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 import org.kestra.core.runners.RunContext;
+import org.kestra.core.runners.RunContextFactory;
 import org.kestra.core.storages.StorageInterface;
 
 import java.io.File;
@@ -25,14 +24,14 @@ import static org.hamcrest.Matchers.is;
 @MicronautTest
 class EncryptDecryptTest {
     @Inject
-    private ApplicationContext applicationContext;
+    private RunContextFactory runContextFactory;
 
     @Inject
     private StorageInterface storageInterface;
 
     @Test
     void run() throws Exception {
-        RunContext runContext = new RunContext(this.applicationContext, ImmutableMap.of());
+        RunContext runContext = runContextFactory.of();
 
         String contactPublic = IOUtils.toString(new FileInputStream(new File(Objects.requireNonNull(EncryptDecryptTest.class.getClassLoader()
             .getResource("pgp/contact-key.pub"))
