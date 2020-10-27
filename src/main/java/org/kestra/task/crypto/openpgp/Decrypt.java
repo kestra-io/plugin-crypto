@@ -1,5 +1,6 @@
 package org.kestra.task.crypto.openpgp;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BouncyGPG;
@@ -7,10 +8,9 @@ import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BuildDecryptionInputS
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
 import org.bouncycastle.util.io.Streams;
-import org.kestra.core.models.annotations.Documentation;
 import org.kestra.core.models.annotations.Example;
-import org.kestra.core.models.annotations.InputProperty;
-import org.kestra.core.models.annotations.OutputProperty;
+import org.kestra.core.models.annotations.Plugin;
+import org.kestra.core.models.annotations.PluginProperty;
 import org.kestra.core.models.tasks.RunnableTask;
 import org.kestra.core.runners.RunContext;
 import org.slf4j.Logger;
@@ -27,63 +27,67 @@ import java.util.List;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@Documentation(
-    description = "Decrypt a file crypted with PGP"
+@Schema(
+    title = "Decrypt a file crypted with PGP"
 )
-@Example(
-    title = "Decrypt a file",
-    code = {
-        "from: \"{{ inputs.file }}\"",
-        "privateKey: |",
-        "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
-        "privateKeyPassphrase: my-passphrase",
-    }
-)
-@Example(
-    title = "Decrypt a file and verify signature",
-    code = {
-        "from: \"{{ inputs.file }}\"",
-        "privateKey: |",
-        "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
-        "privateKeyPassphrase: my-passphrase",
-        "signUsersKey: ",
-        "  - |",
-        "    -----BEGIN PGP PRIVATE KEY BLOCK-----",
-        "requiredSignerUsers: ",
-        "  - signer@kestra.io",
+@Plugin(
+    examples = {
+        @Example(
+            title = "Decrypt a file",
+            code = {
+                "from: \"{{ inputs.file }}\"",
+                "privateKey: |",
+                "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
+                "privateKeyPassphrase: my-passphrase",
+            }
+        ),
+        @Example(
+            title = "Decrypt a file and verify signature",
+            code = {
+                "from: \"{{ inputs.file }}\"",
+                "privateKey: |",
+                "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
+                "privateKeyPassphrase: my-passphrase",
+                "signUsersKey: ",
+                "  - |",
+                "    -----BEGIN PGP PRIVATE KEY BLOCK-----",
+                "requiredSignerUsers: ",
+                "  - signer@kestra.io",
+            }
+        )
     }
 )
 public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output> {
-    @InputProperty(
-        description = "The file to crypt",
-        dynamic = true
+    @Schema(
+        title = "The file to crypt"
     )
+    @PluginProperty(dynamic = true)
     private String from;
 
-    @InputProperty(
-        description = "The private key to decrypt",
-        body = "Must be an ascii key export with `gpg --export-secret-key -a`",
-        dynamic = true
+    @Schema(
+        title = "The private key to decrypt",
+        description = "Must be an ascii key export with `gpg --export-secret-key -a`"
     )
+    @PluginProperty(dynamic = true)
     private String privateKey;
 
-    @InputProperty(
-        description = "The passphrase use to unlock the secret ring",
-        dynamic = true
+    @Schema(
+        title = "The passphrase use to unlock the secret ring"
     )
+    @PluginProperty(dynamic = true)
     protected String privateKeyPassphrase;
 
-    @InputProperty(
-        description = "The public key use to sign the files",
-        body = "Must be an ascii key export with `gpg --export -a`",
-        dynamic = true
+    @Schema(
+        title = "The public key use to sign the files",
+        description = "Must be an ascii key export with `gpg --export -a`"
     )
+    @PluginProperty(dynamic = true)
     private List<String> signUsersKey;
 
-    @InputProperty(
-        description = "The list of recipients the file will be generated.",
-        dynamic = true
+    @Schema(
+        title = "The list of recipients the file will be generated."
     )
+    @PluginProperty(dynamic = true)
     private List<String> requiredSignerUsers;
 
     @Override
@@ -140,8 +144,8 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
     @Builder
     @Getter
     public static class Output implements org.kestra.core.models.tasks.Output {
-        @OutputProperty(
-            body = "The decrypted files uri"
+        @Schema(
+            title = "The decrypted files uri"
         )
         private final URI uri;
     }
