@@ -1,19 +1,16 @@
-# Kestra Crypto Tasks
+# Kestra Crypto Plugin
 
 <p align="center">
-  <img width="460" src="https://github.com/kestra-io/kestra/raw/master/ui/src/assets/logo.svg?sanitize=true"  alt="Kestra workflow orchestrator" />
+  <img width="460" src="https://kestra.io/logo.svg"  alt="Kestra workflow orchestrator" />
 </p>
 
-> Tasks to handle cryptography 
+> Plugin to handle cryptography 
 
-## Task
+![Kestra orchestrator](https://kestra.io/ui.gif)
 
-### OpenPGP
-* `org.kestra.task.fs.http.Download`: Download a file from an http server
-
-### SFTP
-* `org.kestra.task.fs.sftp.Download`: Download a file from an SFTP server
-* `org.kestra.task.fs.sftp.Upload`: Upload a file to an SFTP server
+## Documentation
+* The official Kestra documentation can be found under: [kestra.io](https://kestra.io)
+* This plugin documentation can be found [here](https://kestra.io/plugins/task-crypto/)
 
 
 ## License
