@@ -1,12 +1,12 @@
-package org.kestra.task.crypto.openpgp;
+package io.kestra.plugin.crypto.openpgp;
 
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.callbacks.KeyringConfigCallback;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.callbacks.KeyringConfigCallbacks;
-import org.kestra.core.exceptions.IllegalVariableEvaluationException;
-import org.kestra.core.models.tasks.Task;
-import org.kestra.core.runners.RunContext;
+import io.kestra.core.exceptions.IllegalVariableEvaluationException;
+import io.kestra.core.models.tasks.Task;
+import io.kestra.core.runners.RunContext;
 
 @SuperBuilder
 @ToString

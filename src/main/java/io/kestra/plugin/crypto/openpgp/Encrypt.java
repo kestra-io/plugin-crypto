@@ -1,4 +1,4 @@
-package org.kestra.task.crypto.openpgp;
+package io.kestra.plugin.crypto.openpgp;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
@@ -10,13 +10,13 @@ import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.callbacks.Keyrin
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
 import org.bouncycastle.util.io.Streams;
-import org.kestra.core.exceptions.IllegalVariableEvaluationException;
-import org.kestra.core.models.annotations.Example;
-import org.kestra.core.models.annotations.Plugin;
-import org.kestra.core.models.annotations.PluginProperty;
-import org.kestra.core.models.tasks.RunnableTask;
-import org.kestra.core.models.tasks.Task;
-import org.kestra.core.runners.RunContext;
+import io.kestra.core.exceptions.IllegalVariableEvaluationException;
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.Task;
+import io.kestra.core.runners.RunContext;
 import org.slf4j.Logger;
 
 import java.io.*;
@@ -172,7 +172,7 @@ public class Encrypt extends Task implements RunnableTask<Encrypt.Output> {
 
     @Builder
     @Getter
-    public static class Output implements org.kestra.core.models.tasks.Output {
+    public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
             title = "The encrypted files uri"
         )
