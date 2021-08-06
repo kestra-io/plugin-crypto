@@ -112,7 +112,7 @@ public class Encrypt extends Task implements RunnableTask<Encrypt.Output> {
     public Encrypt.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
         URI from = URI.create(runContext.render(this.from));
-        File outFile = File.createTempFile(this.getClass().getSimpleName().toLowerCase() + "_", ".pgp");
+        File outFile = runContext.tempFile().toFile();
 
         final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext));
 
