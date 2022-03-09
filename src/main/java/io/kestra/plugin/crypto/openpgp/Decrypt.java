@@ -1,5 +1,10 @@
 package io.kestra.plugin.crypto.openpgp;
 
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -8,11 +13,6 @@ import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BuildDecryptionInputS
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
 import org.bouncycastle.util.io.Streams;
-import io.kestra.core.models.annotations.Example;
-import io.kestra.core.models.annotations.Plugin;
-import io.kestra.core.models.annotations.PluginProperty;
-import io.kestra.core.models.tasks.RunnableTask;
-import io.kestra.core.runners.RunContext;
 import org.slf4j.Logger;
 
 import java.io.BufferedOutputStream;
@@ -108,7 +108,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
             }
         }
 
-        BouncyGPG.registerProvider();
+        AbstractPgp.addProvider();
 
         try (
             final FileOutputStream fileOutput = new FileOutputStream(outFile);

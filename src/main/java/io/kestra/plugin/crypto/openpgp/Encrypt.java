@@ -1,5 +1,11 @@
 package io.kestra.plugin.crypto.openpgp;
 
+import io.kestra.core.exceptions.IllegalVariableEvaluationException;
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -10,13 +16,6 @@ import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.callbacks.Keyrin
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
 import org.bouncycastle.util.io.Streams;
-import io.kestra.core.exceptions.IllegalVariableEvaluationException;
-import io.kestra.core.models.annotations.Example;
-import io.kestra.core.models.annotations.Plugin;
-import io.kestra.core.models.annotations.PluginProperty;
-import io.kestra.core.models.tasks.RunnableTask;
-import io.kestra.core.models.tasks.Task;
-import io.kestra.core.runners.RunContext;
 import org.slf4j.Logger;
 
 import java.io.*;
@@ -61,7 +60,7 @@ import java.util.List;
         )
     }
 )
-public class Encrypt extends Task implements RunnableTask<Encrypt.Output> {
+public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output> {
     @Schema(
         title = "The file to crypt"
     )
@@ -128,7 +127,7 @@ public class Encrypt extends Task implements RunnableTask<Encrypt.Output> {
             keyringConfig.addSecretKey(runContext.render(this.signPrivateKey).getBytes());
         }
 
-        BouncyGPG.registerProvider();
+        AbstractPgp.addProvider();
 
         try (
             final FileOutputStream fileOutput = new FileOutputStream(outFile);
