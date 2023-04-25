@@ -20,11 +20,11 @@ repositories {
     }
 }
 
-sourceCompatibility = 11
-targetCompatibility = 11
+sourceCompatibility = 17
+targetCompatibility = 17
 
 group "io.kestra.plugin"
-description 'Cryptography plugin for Kestra'
+description 'Secure data using encryption and decryption in Kestra pipelines.'
 
 tasks.withType(JavaCompile) {
     options.encoding = "UTF-8"
