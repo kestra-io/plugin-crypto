@@ -112,6 +112,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
     @Override
     public Encrypt.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
+        List<String> recipients = runContext.render(this.recipients);
         URI from = URI.create(runContext.render(this.from));
         File outFile = runContext.tempFile().toFile();
 
