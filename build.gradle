@@ -34,6 +34,10 @@ tasks.withType(JavaCompile) {
 configurations.all {
     resolutionStrategy {
         force("org.slf4j:slf4j-api:1.7.36")
+
+        // ugly bug on crypto plugin
+        force('org.bouncycastle:bcprov-jdk15on:1.70')
+        force('org.bouncycastle:bcpg-jdk15on:1.70')
     }
 }
 
