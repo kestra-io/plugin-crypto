@@ -18,7 +18,7 @@ import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.Keyring
 import org.bouncycastle.util.io.Streams;
 import org.slf4j.Logger;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 import java.io.*;
 import java.net.URI;
 import java.util.List;
