@@ -36,8 +36,8 @@ configurations.all {
         force("org.slf4j:slf4j-api:1.7.36")
 
         // ugly bug on crypto plugin
-        force('org.bouncycastle:bcprov-jdk15on:1.70')
-        force('org.bouncycastle:bcpg-jdk15on:1.70')
+        force('org.bouncycastle:bcprov-jdk18on:1.77')
+        force('org.bouncycastle:bcpg-jdk18on:1.77')
     }
 }
 
@@ -58,8 +58,8 @@ dependencies {
     compileOnly group: "io.kestra", name: "core", version: kestraVersion
 
     // libs included in the final jar
-    api 'org.bouncycastle:bcprov-jdk15on:1.70'
-    api 'org.bouncycastle:bcpg-jdk15on:1.70'
+    api 'org.bouncycastle:bcprov-jdk18on:1.77'
+    api 'org.bouncycastle:bcpg-jdk18on:1.77'
     api 'name.neuhalfen.projects.crypto.bouncycastle.openpgp:bouncy-gpg:2.3.0'
 }
 
