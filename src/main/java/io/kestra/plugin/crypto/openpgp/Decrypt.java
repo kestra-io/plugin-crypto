@@ -113,7 +113,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
         try (
             final FileOutputStream fileOutput = new FileOutputStream(outFile);
             final BufferedOutputStream bufferedOut = new BufferedOutputStream(fileOutput);
-            final InputStream inputStream = runContext.uriToInputStream(from);
+            final InputStream inputStream = runContext.storage().getFile(from);
         ) {
             BuildDecryptionInputStreamAPI.ValidationWithKeySelectionStrategy builder = BouncyGPG
                 .decryptAndVerifyStream()
@@ -133,7 +133,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
             }
         }
 
-        URI uri = runContext.putTempFile(outFile);
+        URI uri = runContext.storage().putFile(outFile);
         logger.debug("Decrypted file at '{}", uri);
 
         return Decrypt.Output.builder()

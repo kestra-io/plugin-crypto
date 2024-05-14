@@ -135,7 +135,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         try (
             final FileOutputStream fileOutput = new FileOutputStream(outFile);
             final BufferedOutputStream bufferedOut = new BufferedOutputStream(fileOutput);
-            final InputStream inputStream = runContext.uriToInputStream(from);
+            final InputStream inputStream = runContext.storage().getFile(from);
         ) {
             BuildEncryptionOutputStreamAPI.WithAlgorithmSuite.To.SignWith builder = BouncyGPG
                 .encryptToStream()
@@ -156,7 +156,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
             }
         }
 
-        URI uri = runContext.putTempFile(outFile);
+        URI uri = runContext.storage().putFile(outFile);
         logger.debug("Encrypted file at '{}", uri);
 
         return Output.builder()
