@@ -114,7 +114,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         Logger logger = runContext.logger();
         List<String> recipients = runContext.render(this.recipients);
         URI from = URI.create(runContext.render(this.from));
-        File outFile = runContext.tempFile().toFile();
+        File outFile = runContext.workingDir().createTempFile().toFile();
 
         final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext));
 

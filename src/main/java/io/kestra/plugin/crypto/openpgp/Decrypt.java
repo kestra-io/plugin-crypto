@@ -94,7 +94,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
     public Decrypt.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
         URI from = URI.create(runContext.render(this.from));
-        File outFile = runContext.tempFile().toFile();
+        File outFile = runContext.workingDir().createTempFile().toFile();
 
         final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext, this.privateKeyPassphrase));
 
