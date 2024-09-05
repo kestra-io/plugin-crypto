@@ -35,29 +35,51 @@ import java.util.List;
     examples = {
         @Example(
             title = "Encrypt a file not signed",
-            code = {
-                "from: \"{{ inputs.file }}\"",
-                "key: |",
-                "  -----BEGIN PGP PUBLIC KEY BLOCK----- ... ",
-                "recipients:",
-                "  - hello@kestra.io",
-            }
+            full = true,
+            code = """
+                id: crypto_encrypt
+                namespace: company.team
+
+                inputs:
+                  - id: file
+                    type: FILE
+                 
+                tasks:
+                  - id: encrypt
+                    type: io.kestra.plugin.crypto.openpgp.Encrypt
+                    from: "{{ inputs.file }}"
+                    key: |
+                      -----BEGIN PGP PUBLIC KEY BLOCK----- ... 
+                    recipients:
+                      - hello@kestra.io
+                """
         ),
         @Example(
             title = "Encrypt a file signed",
-            code = {
-                "from: \"{{ inputs.file }}\"",
-                "key: |",
-                "  -----BEGIN PGP PUBLIC KEY BLOCK----- ... ",
-                "recipients:",
-                "  - hello@kestra.io",
-                "signPublicKey: |",
-                "  -----BEGIN PGP PUBLIC KEY BLOCK----- ... ",
-                "signPrivateKey: |",
-                "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
-                "signPassphrase: my-passphrase",
-                "signUser: signer@kestra.io"
-            }
+            full = true,
+            code = """
+                id: crypto_encrypt
+                namespace: company.team
+
+                inputs:
+                  - id: file
+                    type: FILE
+                 
+                tasks:
+                  - id: encrypt
+                    type: io.kestra.plugin.crypto.openpgp.Encrypt
+                    from: "{{ inputs.file }}"
+                    key: |
+                      -----BEGIN PGP PUBLIC KEY BLOCK----- ... 
+                    recipients:
+                      - hello@kestra.io
+                    signPublicKey: |
+                      -----BEGIN PGP PUBLIC KEY BLOCK----- ... 
+                    signPrivateKey: |
+                      -----BEGIN PGP PRIVATE KEY BLOCK-----
+                    signPassphrase: my-passphrase
+                    signUser: signer@kestra.io
+                """
         )
     }
 )
