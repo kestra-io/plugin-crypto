@@ -34,26 +34,48 @@ import java.util.List;
     examples = {
         @Example(
             title = "Decrypt a file",
-            code = {
-                "from: \"{{ inputs.file }}\"",
-                "privateKey: |",
-                "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
-                "privateKeyPassphrase: my-passphrase",
-            }
+            full = true,
+            code = """
+                id: crypto_decrypt
+                namespace: company.team
+
+                inputs:
+                  - id: file
+                    type: FILE
+                
+                tasks:
+                  - id: decrypt
+                    type: io.kestra.plugin.crypto.openpgp.Decrypt
+                    from: "{{ inputs.file }}"
+                    privateKey: |
+                      -----BEGIN PGP PRIVATE KEY BLOCK-----
+                    privateKeyPassphrase: my-passphrase
+                """
         ),
         @Example(
             title = "Decrypt a file and verify signature",
-            code = {
-                "from: \"{{ inputs.file }}\"",
-                "privateKey: |",
-                "  -----BEGIN PGP PRIVATE KEY BLOCK-----",
-                "privateKeyPassphrase: my-passphrase",
-                "signUsersKey: ",
-                "  - |",
-                "    -----BEGIN PGP PRIVATE KEY BLOCK-----",
-                "requiredSignerUsers: ",
-                "  - signer@kestra.io",
-            }
+            full = true,
+            code = """
+                id: crypto_decrypt
+                namespace: company.team
+
+                inputs:
+                  - id: file
+                    type: FILE
+
+                tasks:
+                  - id: decrypt
+                    type: io.kestra.plugin.crypto.openpgp.Decrypt
+                    from: "{{ inputs.file }}"
+                    privateKey: |
+                      -----BEGIN PGP PRIVATE KEY BLOCK-----
+                    privateKeyPassphrase: my-passphrase
+                    signUsersKey: 
+                      - |
+                        -----BEGIN PGP PRIVATE KEY BLOCK-----
+                    requiredSignerUsers: 
+                      - signer@kestra.io
+                """
         )
     }
 )
