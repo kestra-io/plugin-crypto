@@ -1,6 +1,7 @@
 package io.kestra.plugin.crypto.openpgp;
 
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
+import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.Task;
 import io.kestra.core.runners.RunContext;
 import lombok.EqualsAndHashCode;
@@ -20,7 +21,7 @@ import java.security.Security;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-abstract public class AbstractPgp extends Task {
+public abstract class AbstractPgp extends Task {
     protected static synchronized void addProvider() {
         Provider bc = Security.getProvider("BC");
         if (bc == null) {
@@ -28,11 +29,10 @@ abstract public class AbstractPgp extends Task {
         }
     }
 
-    protected static KeyringConfigCallback keyringConfig(RunContext runContext, String passphrase) throws IllegalVariableEvaluationException {
-        if (passphrase != null) {
-            return KeyringConfigCallbacks.withPassword(runContext.render(passphrase));
-        } else {
-            return KeyringConfigCallbacks.withUnprotectedKeys();
-        }
+    protected static KeyringConfigCallback keyringConfig(RunContext runContext, Property<String> passphrase) throws IllegalVariableEvaluationException {
+        return runContext.render(passphrase)
+            .as(String.class)
+            .map(KeyringConfigCallbacks::withPassword)
+            .orElseGet(KeyringConfigCallbacks::withUnprotectedKeys);
     }
 }

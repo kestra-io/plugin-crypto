@@ -1,24 +1,21 @@
 package io.kestra.plugin.crypto.openpgp;
 
-import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
-import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BouncyGPG;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BuildEncryptionOutputStreamAPI;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.callbacks.KeyringConfigCallback;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.callbacks.KeyringConfigCallbacks;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
 import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
 import org.bouncycastle.util.io.Streams;
 import org.slf4j.Logger;
 
-import jakarta.validation.constraints.NotNull;
 import java.io.*;
 import java.net.URI;
 import java.util.List;
@@ -87,69 +84,62 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
     @Schema(
         title = "The file to crypt"
     )
-    @PluginProperty(dynamic = true)
-    private String from;
+    private Property<String> from;
 
     @Schema(
         title = "The public key use to sign the files",
         description = "Must be an ascii key export with `gpg --export -a`"
     )
-    @PluginProperty(dynamic = true)
-    private String key;
+    private Property<String> key;
 
     @Schema(
         title = "The list of recipients the file will be generated."
     )
     @NotNull
-    @PluginProperty(dynamic = true)
-    private List<String> recipients;
+    private Property<List<String>> recipients;
 
     @Schema(
         title = "The public key use to sign the files",
         description = "Must be an ascii key export with `gpg --export -a`"
     )
-    @PluginProperty(dynamic = true)
-    private String signPublicKey;
+    private Property<String> signPublicKey;
 
     @Schema(
         title = "The public key use to sign the files",
         description = "Must be an ascii key export with `gpg --export -a`"
     )
-    @PluginProperty(dynamic = true)
-    private String signPrivateKey;
+    private Property<String> signPrivateKey;
 
     @Schema(
         title = "The passphrase use to unlock the secret ring"
     )
-    @PluginProperty(dynamic = true)
-    protected String signPassphrase;
+    protected Property<String> signPassphrase;
 
     @Schema(
         title = "The user that will signed the files",
         description = "If you want to sign the file, you need to provide a `privateKey`"
     )
-    @PluginProperty(dynamic = true)
-    private String signUser;
+    private Property<String> signUser;
 
     @Override
     public Encrypt.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
-        List<String> recipients = runContext.render(this.recipients);
-        URI from = URI.create(runContext.render(this.from));
+        List<String> recipients = runContext.render(this.recipients).asList(String.class);
+        URI from = URI.create(runContext.render(this.from).as(String.class).orElseThrow());
         File outFile = runContext.workingDir().createTempFile().toFile();
 
-        final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext));
+        final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext, this.signPassphrase));
 
         if (this.key != null) {
-            keyringConfig.addPublicKey(runContext.render(this.key).getBytes());
+            keyringConfig.addPublicKey(runContext.render(this.key).as(String.class).orElseThrow().getBytes());
         }
 
         if (this.signPublicKey != null) {
-            keyringConfig.addPublicKey(runContext.render(this.signPublicKey).getBytes());
+            keyringConfig.addPublicKey(runContext.render(this.signPublicKey).as(String.class).orElseThrow().getBytes());
         }
 
         if (this.signPrivateKey != null) {
-            keyringConfig.addSecretKey(runContext.render(this.signPrivateKey).getBytes());
+            keyringConfig.addSecretKey(runContext.render(this.signPrivateKey).as(String.class).orElseThrow().getBytes());
         }
 
         AbstractPgp.addProvider();
@@ -168,7 +158,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
             BuildEncryptionOutputStreamAPI.WithAlgorithmSuite.To.SignWith.Armor armor;
 
             if (signUser != null) {
-                armor = builder.andSignWith(this.signUser);
+                armor = builder.andSignWith(runContext.render(this.signUser).as(String.class).orElseThrow());
             } else {
                 armor = builder.andDoNotSign();
             }
@@ -184,14 +174,6 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         return Output.builder()
             .uri(uri)
             .build();
-    }
-
-    protected KeyringConfigCallback keyringConfig(RunContext runContext) throws IllegalVariableEvaluationException {
-        if (this.signPassphrase != null) {
-            return KeyringConfigCallbacks.withPassword(runContext.render(this.signPassphrase));
-        } else {
-            return KeyringConfigCallbacks.withUnprotectedKeys();
-        }
     }
 
     @Builder
