@@ -56,6 +56,7 @@ class EncryptDecryptTest {
 
         URI fileStorage = storageInterface.put(
             null,
+            null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(file)
         );
@@ -81,7 +82,7 @@ class EncryptDecryptTest {
         Decrypt.Output decryptOutput = decrypt.run(runContext);
 
         assertThat(
-            CharStreams.toString(new InputStreamReader(storageInterface.get(null, decryptOutput.getUri()))),
+            CharStreams.toString(new InputStreamReader(storageInterface.get(null, null, decryptOutput.getUri()))),
             is(CharStreams.toString(new InputStreamReader(new FileInputStream(file))))
         );
     }
