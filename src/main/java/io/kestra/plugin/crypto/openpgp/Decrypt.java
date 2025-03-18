@@ -2,6 +2,7 @@ package io.kestra.plugin.crypto.openpgp;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -42,7 +43,7 @@ import java.util.List;
                 inputs:
                   - id: file
                     type: FILE
-                
+
                 tasks:
                   - id: decrypt
                     type: io.kestra.plugin.crypto.openpgp.Decrypt
@@ -70,10 +71,10 @@ import java.util.List;
                     privateKey: |
                       -----BEGIN PGP PRIVATE KEY BLOCK-----
                     privateKeyPassphrase: my-passphrase
-                    signUsersKey: 
+                    signUsersKey:
                       - |
                         -----BEGIN PGP PRIVATE KEY BLOCK-----
-                    requiredSignerUsers: 
+                    requiredSignerUsers:
                       - signer@kestra.io
                 """
         )
@@ -83,6 +84,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
     @Schema(
         title = "The file to crypt"
     )
+    @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(

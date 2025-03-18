@@ -2,6 +2,7 @@ package io.kestra.plugin.crypto.openpgp;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -40,13 +41,13 @@ import java.util.List;
                 inputs:
                   - id: file
                     type: FILE
-                 
+
                 tasks:
                   - id: encrypt
                     type: io.kestra.plugin.crypto.openpgp.Encrypt
                     from: "{{ inputs.file }}"
                     key: |
-                      -----BEGIN PGP PUBLIC KEY BLOCK----- ... 
+                      -----BEGIN PGP PUBLIC KEY BLOCK----- ...
                     recipients:
                       - hello@kestra.io
                 """
@@ -61,17 +62,17 @@ import java.util.List;
                 inputs:
                   - id: file
                     type: FILE
-                 
+
                 tasks:
                   - id: encrypt
                     type: io.kestra.plugin.crypto.openpgp.Encrypt
                     from: "{{ inputs.file }}"
                     key: |
-                      -----BEGIN PGP PUBLIC KEY BLOCK----- ... 
+                      -----BEGIN PGP PUBLIC KEY BLOCK----- ...
                     recipients:
                       - hello@kestra.io
                     signPublicKey: |
-                      -----BEGIN PGP PUBLIC KEY BLOCK----- ... 
+                      -----BEGIN PGP PUBLIC KEY BLOCK----- ...
                     signPrivateKey: |
                       -----BEGIN PGP PRIVATE KEY BLOCK-----
                     signPassphrase: my-passphrase
@@ -84,6 +85,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
     @Schema(
         title = "The file to crypt"
     )
+    @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
