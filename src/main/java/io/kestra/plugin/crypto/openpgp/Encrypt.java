@@ -27,7 +27,7 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Encrypt a file with PGP"
+    title = "Encrypt a file with PGP."
 )
 @Plugin(
     examples = {

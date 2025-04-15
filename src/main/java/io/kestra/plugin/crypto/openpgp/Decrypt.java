@@ -29,7 +29,7 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Decrypt a file encrypted with PGP"
+    title = "Decrypt a file encrypted with PGP."
 )
 @Plugin(
     examples = {
