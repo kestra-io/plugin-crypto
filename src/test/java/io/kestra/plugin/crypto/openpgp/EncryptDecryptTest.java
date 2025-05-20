@@ -7,6 +7,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.tenant.TenantService;
 import jakarta.inject.Inject;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class EncryptDecryptTest {
             .toURI());
 
         URI fileStorage = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(file)
@@ -82,7 +83,7 @@ class EncryptDecryptTest {
         Decrypt.Output decryptOutput = decrypt.run(runContext);
 
         assertThat(
-            CharStreams.toString(new InputStreamReader(storageInterface.get(null, null, decryptOutput.getUri()))),
+            CharStreams.toString(new InputStreamReader(storageInterface.get(TenantService.MAIN_TENANT, null, decryptOutput.getUri()))),
             is(CharStreams.toString(new InputStreamReader(new FileInputStream(file))))
         );
     }
