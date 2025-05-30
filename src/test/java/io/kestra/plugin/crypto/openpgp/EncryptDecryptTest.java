@@ -63,22 +63,22 @@ class EncryptDecryptTest {
         );
 
         Encrypt encrypt = Encrypt.builder()
-            .from(Property.of(fileStorage.toString()))
-            .key(Property.of(contactPublic))
-            .signPublicKey(Property.of(helloPublic))
-            .signPrivateKey(Property.of(helloPrivate))
-            .signPassphrase(Property.of("abc456"))
-            .signUser(Property.of("hello@kestra.io"))
-            .recipients(Property.of(Collections.singletonList("contact@kestra.io")))
+            .from(Property.ofValue(fileStorage.toString()))
+            .key(Property.ofValue(contactPublic))
+            .signPublicKey(Property.ofValue(helloPublic))
+            .signPrivateKey(Property.ofValue(helloPrivate))
+            .signPassphrase(Property.ofValue("abc456"))
+            .signUser(Property.ofValue("hello@kestra.io"))
+            .recipients(Property.ofValue(Collections.singletonList("contact@kestra.io")))
             .build();
         Encrypt.Output encryptOutput = encrypt.run(runContext);
 
         Decrypt decrypt = Decrypt.builder()
-            .from(Property.of(encryptOutput.getUri().toString()))
-            .privateKey(Property.of(contactPrivate))
-            .privateKeyPassphrase(Property.of("abc456"))
-            .signUsersKey(Property.of(Collections.singletonList(helloPublic)))
-            .requiredSignerUsers(Property.of(Collections.singletonList("hello@kestra.io")))
+            .from(Property.ofValue(encryptOutput.getUri().toString()))
+            .privateKey(Property.ofValue(contactPrivate))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .signUsersKey(Property.ofValue(Collections.singletonList(helloPublic)))
+            .requiredSignerUsers(Property.ofValue(Collections.singletonList("hello@kestra.io")))
             .build();
         Decrypt.Output decryptOutput = decrypt.run(runContext);
 
