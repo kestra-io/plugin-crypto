@@ -32,14 +32,6 @@ tasks.withType(JavaCompile) {
     options.compilerArgs.add("-parameters")
 }
 
-configurations.all {
-    resolutionStrategy {
-        // ugly bug on crypto plugin
-        force('org.bouncycastle:bcprov-jdk18on:1.81')
-        force('org.bouncycastle:bcpg-jdk18on:1.81')
-  }
-}
-
 dependencies {
     // Platform
     annotationProcessor enforcedPlatform("io.kestra:platform:$kestraVersion")
