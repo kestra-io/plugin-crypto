@@ -87,4 +87,48 @@ class EncryptDecryptTest {
             is(CharStreams.toString(new InputStreamReader(new FileInputStream(file))))
         );
     }
+
+    @Test
+    void runUnsigned() throws Exception {
+        RunContext runContext = runContextFactory.of();
+
+        String contactPublic = IOUtils.toString(new FileInputStream(new File(
+            Objects.requireNonNull(EncryptDecryptTest.class.getClassLoader().getResource("pgp/contact-key.pub")).toURI()
+        )), StandardCharsets.US_ASCII);
+
+        String contactPrivate = IOUtils.toString(new FileInputStream(new File(
+            Objects.requireNonNull(EncryptDecryptTest.class.getClassLoader().getResource("pgp/contact-key.sec")).toURI()
+        )), StandardCharsets.US_ASCII);
+
+        File file = new File(
+            Objects.requireNonNull(EncryptDecryptTest.class.getClassLoader().getResource("application.yml")).toURI()
+        );
+
+        URI fileStorage = storageInterface.put(
+            TenantService.MAIN_TENANT,
+            null,
+            new URI("/" + FriendlyId.createFriendlyId()),
+            new FileInputStream(file)
+        );
+
+        var encrypt = Encrypt.builder()
+            .from(Property.ofValue(fileStorage.toString()))
+            .key(Property.ofValue(contactPublic))
+            .recipients(Property.ofValue(Collections.singletonList("contact@kestra.io")))
+            .build();
+
+        var encryptOutput = encrypt.run(runContext);
+
+        var decrypt = Decrypt.builder()
+            .from(Property.ofValue(encryptOutput.getUri().toString()))
+            .privateKey(Property.ofValue(contactPrivate))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .build();
+
+        var decryptOutput = decrypt.run(runContext);
+
+        assertThat(CharStreams.toString(new InputStreamReader(storageInterface.get(TenantService.MAIN_TENANT, null, decryptOutput.getUri()))), is(CharStreams.toString(new InputStreamReader(new FileInputStream(file)))));
+    }
+
+
 }
