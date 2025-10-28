@@ -10,25 +10,25 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BouncyGPG;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BuildEncryptionOutputStreamAPI;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
-import org.bouncycastle.util.io.Streams;
+import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
+import org.bouncycastle.openpgp.operator.jcajce.*;
 import org.slf4j.Logger;
 
 import java.io.*;
 import java.net.URI;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.*;
 
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@Schema(
-    title = "Encrypt a file with PGP."
-)
+@Schema(title = "Encrypt a file with PGP (fully compatible with old plugin).")
 @Plugin(
     examples = {
         @Example(
@@ -125,48 +125,76 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
 
     @Override
     public Encrypt.Output run(RunContext runContext) throws Exception {
-        Logger logger = runContext.logger();
-        List<String> recipients = runContext.render(this.recipients).asList(String.class);
-        URI from = URI.create(runContext.render(this.from).as(String.class).orElseThrow());
-        File outFile = runContext.workingDir().createTempFile().toFile();
-
-        final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext, this.signPassphrase));
-
-        if (this.key != null) {
-            keyringConfig.addPublicKey(runContext.render(this.key).as(String.class).orElseThrow().getBytes());
-        }
-
-        if (this.signPublicKey != null) {
-            keyringConfig.addPublicKey(runContext.render(this.signPublicKey).as(String.class).orElseThrow().getBytes());
-        }
-
-        if (this.signPrivateKey != null) {
-            keyringConfig.addSecretKey(runContext.render(this.signPrivateKey).as(String.class).orElseThrow().getBytes());
-        }
+        var logger = runContext.logger();
 
         AbstractPgp.addProvider();
 
-        try (
-            final FileOutputStream fileOutput = new FileOutputStream(outFile);
-            final BufferedOutputStream bufferedOut = new BufferedOutputStream(fileOutput);
-            final InputStream inputStream = runContext.storage().getFile(from);
-        ) {
-            BuildEncryptionOutputStreamAPI.WithAlgorithmSuite.To.SignWith builder = BouncyGPG
-                .encryptToStream()
-                .withConfig(keyringConfig)
-                .withStrongAlgorithms()
-                .toRecipients(recipients.toArray(String[]::new));
+        var rFrom = URI.create(runContext.render(this.from).as(String.class).orElseThrow());
+        File outFile = runContext.workingDir().createTempFile().toFile();
 
-            BuildEncryptionOutputStreamAPI.WithAlgorithmSuite.To.SignWith.Armor armor;
+        var rKey = runContext.render(this.key).as(String.class).orElseThrow();
 
-            if (signUser != null) {
-                armor = builder.andSignWith(runContext.render(this.signUser).as(String.class).orElseThrow());
-            } else {
-                armor = builder.andDoNotSign();
-            }
+        PGPPublicKeyRingCollection pubKeyRings;
+        try (var pubKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(rKey.getBytes(StandardCharsets.UTF_8)))) {
+            pubKeyRings = new PGPPublicKeyRingCollection(pubKeyIn, new JcaKeyFingerprintCalculator());
+        }
 
-            try (OutputStream outputStream = armor.binaryOutput().andWriteTo(bufferedOut)) {
-                Streams.pipeAll(inputStream, outputStream);
+        PGPPublicKey encryptionKey = pubKeyRings.getKeyRings().next().getPublicKey();
+
+        PGPSignatureGenerator signatureGenerator = null;
+        if (this.signPrivateKey != null && this.signUser != null) {
+            var rSignPrivateKey = runContext.render(this.signPrivateKey).as(String.class).orElseThrow();
+            var rSignPassphrase = runContext.render(this.signPassphrase).as(String.class).orElse("").toCharArray();
+
+            InputStream privKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(rSignPrivateKey.getBytes(StandardCharsets.UTF_8)));
+            var secretKeyRings = new PGPSecretKeyRingCollection(privKeyIn, new JcaKeyFingerprintCalculator());
+            PGPSecretKey signingSecretKey = secretKeyRings.getKeyRings().next().getSecretKey();
+            PGPPrivateKey signingPrivateKey = signingSecretKey.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder().build(rSignPassphrase));
+
+            PGPContentSignerBuilder signerBuilder = new JcaPGPContentSignerBuilder(
+                signingSecretKey.getPublicKey().getAlgorithm(), PGPUtil.SHA256
+            );
+
+            signatureGenerator = new PGPSignatureGenerator(signerBuilder, signingSecretKey.getPublicKey());
+            signatureGenerator.init(PGPSignature.BINARY_DOCUMENT, signingPrivateKey);
+
+        }
+
+        try (OutputStream fileOut = new BufferedOutputStream(new FileOutputStream(outFile));
+             var armoredOut = new ArmoredOutputStream(fileOut);
+             InputStream input = runContext.storage().getFile(rFrom)) {
+
+            var encryptor = new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
+                .setWithIntegrityPacket(true)
+                .setSecureRandom(new SecureRandom());
+
+            var encGen = new PGPEncryptedDataGenerator(encryptor);
+            encGen.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(encryptionKey));
+
+            try (OutputStream encOut = encGen.open(armoredOut, new byte[4096])) {
+                var comData = new PGPCompressedDataGenerator(PGPCompressedData.ZIP);
+                try (var compressedOut = comData.open(encOut)) {
+                    if (signatureGenerator != null) {
+                        signatureGenerator.generateOnePassVersion(false).encode(compressedOut);
+                    }
+
+                    PGPLiteralDataGenerator literalGen = new PGPLiteralDataGenerator();
+                    try (var literalOut = literalGen.open(
+                        compressedOut, PGPLiteralData.BINARY, "data", new Date(), new byte[4096])) {
+
+                        int ch;
+                        while ((ch = input.read()) >= 0) {
+                            if (signatureGenerator != null) {
+                                signatureGenerator.update((byte) ch);
+                            }
+                            literalOut.write(ch);
+                        }
+                    }
+
+                    if (signatureGenerator != null) {
+                        signatureGenerator.generate().encode(compressedOut);
+                    }
+                }
             }
         }
 
