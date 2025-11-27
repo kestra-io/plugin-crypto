@@ -1,0 +1,8 @@
+group: io.kestra.plugin.crypto
+name: "crypto"
+title: "Cryptography"
+description: "Secure data using encryption and decryption in Kestra pipelines."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
