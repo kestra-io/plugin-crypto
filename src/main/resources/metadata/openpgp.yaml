@@ -1,8 +1,8 @@
 group: io.kestra.plugin.crypto.openpgp
 name: "openpgp"
 title: "OpenPGP"
-description: "This sub-group of plugins contains tasks for encrypting and decrypting files."
-body: ""
+description: "Tasks that encrypt and decrypt files with OpenPGP, including optional signing and signature verification."
+body: "Encrypt accepts a source file (`from`), recipient list, and ASCII-armored public keys, and can sign the output when given signing keys and a passphrase; Decrypt takes the encrypted file, a private key with optional passphrase, and can validate signatures against allowed users. Both tasks stream files through Kestra storage and return the resulting file URI for downstream processing."
 videos: []
 createdBy: "Kestra Core Team"
 managedBy: "Kestra Core Team"
