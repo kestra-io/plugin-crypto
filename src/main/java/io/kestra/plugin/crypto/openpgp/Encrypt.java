@@ -28,7 +28,10 @@ import java.util.*;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@Schema(title = "Encrypt a file with PGP (fully compatible with old plugin).")
+@Schema(
+    title = "Encrypt and optionally sign files with OpenPGP",
+    description = "Streams a Kestra-stored file through ASCII-armored PGP encryption (AES-256 with integrity) and returns the storage URI. Optionally signs the payload when a private key and passphrase are provided; only the first public key in `key` is used for encryption."
+)
 @Plugin(
     examples = {
         @Example(
@@ -83,43 +86,46 @@ import java.util.*;
 )
 public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output> {
     @Schema(
-        title = "The file to crypt"
+        title = "Source file to encrypt",
+        description = "Kestra internal storage URI or templated path to the cleartext file."
     )
     @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
-        title = "The public key use to sign the files",
-        description = "Must be an ascii key export with `gpg --export -a`"
+        title = "Public key for encryption",
+        description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used."
     )
     private Property<String> key;
 
     @Schema(
-        title = "The list of recipients the file will be generated."
+        title = "Recipient identifiers",
+        description = "Required metadata for compatibility; values are not validated against the provided key."
     )
     @NotNull
     private Property<List<String>> recipients;
 
     @Schema(
-        title = "The public key use to sign the files",
-        description = "Must be an ascii key export with `gpg --export -a`"
+        title = "Public key used for signature metadata",
+        description = "Optional ASCII-armored export; kept for compatibility with legacy plugin expectations."
     )
     private Property<String> signPublicKey;
 
     @Schema(
-        title = "The public key use to sign the files",
-        description = "Must be an ascii key export with `gpg --export -a`"
+        title = "Private key for signing",
+        description = "ASCII-armored secret key used to sign the encrypted payload."
     )
     private Property<String> signPrivateKey;
 
     @Schema(
-        title = "The passphrase use to unlock the secret ring"
+        title = "Passphrase for signing key",
+        description = "Leave empty if the signing key is not protected."
     )
     protected Property<String> signPassphrase;
 
     @Schema(
-        title = "The user that will signed the files",
-        description = "If you want to sign the file, you need to provide a `privateKey`"
+        title = "User ID bound to the signature",
+        description = "Required when signing; identifies the signing key within the secret key ring."
     )
     private Property<String> signUser;
 
@@ -210,7 +216,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "The encrypted files uri"
+            title = "URI of encrypted file"
         )
         private final URI uri;
     }
