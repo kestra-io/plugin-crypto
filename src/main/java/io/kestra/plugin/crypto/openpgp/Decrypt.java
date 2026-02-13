@@ -29,7 +29,8 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Decrypt a file encrypted with PGP."
+    title = "Decrypt and optionally verify OpenPGP files",
+    description = "Streams an ASCII-armored PGP message from Kestra storage, decrypts it with the provided secret key and optional passphrase, and returns the cleartext URI. When signer public keys are supplied, verifies a one-pass signature and can enforce specific signer user IDs."
 )
 @Plugin(
     examples = {
@@ -82,30 +83,33 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 )
 public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output> {
     @Schema(
-        title = "The file to crypt"
+        title = "Source file to decrypt",
+        description = "Kestra internal storage URI or templated path to the encrypted message."
     )
     @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
-        title = "The private key to decrypt",
-        description = "Must be an ascii key export with `gpg --export-secret-key -a`"
+        title = "Private key for decryption",
+        description = "ASCII-armored secret key export such as `gpg --export-secret-key -a`; the first key ring found is used."
     )
     private Property<String> privateKey;
 
     @Schema(
-        title = "The passphrase use to unlock the secret ring"
+        title = "Passphrase for private key",
+        description = "Leave empty for unprotected keys; required for most secret keys."
     )
     protected Property<String> privateKeyPassphrase;
 
     @Schema(
-        title = "The public key use to sign the files",
-        description = "Must be an ascii key export with `gpg --export -a`"
+        title = "Allowed signer public keys",
+        description = "Optional list of ASCII-armored public keys used to verify one-pass signatures."
     )
     private Property<List<String>> signUsersKey;
 
     @Schema(
-        title = "The list of recipients the file will be generated."
+        title = "Required signer user IDs",
+        description = "If set, verification fails unless the signature user ID matches one of these values; ignored when no signature is present."
     )
     private Property<List<String>> requiredSignerUsers;
 
@@ -230,7 +234,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "The decrypted files uri"
+            title = "URI of decrypted file"
         )
         private final URI uri;
     }
