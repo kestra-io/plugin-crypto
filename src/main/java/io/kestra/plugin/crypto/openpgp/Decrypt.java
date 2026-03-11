@@ -1,25 +1,27 @@
 package io.kestra.plugin.crypto.openpgp;
 
-import io.kestra.core.models.annotations.Example;
-import io.kestra.core.models.annotations.Plugin;
-import io.kestra.core.models.annotations.PluginProperty;
-import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.RunnableTask;
-import io.kestra.core.runners.RunContext;
-import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import org.bouncycastle.openpgp.*;
-import org.bouncycastle.openpgp.operator.jcajce.*;
-import org.bouncycastle.util.io.Streams;
-import org.slf4j.Logger;
-
 import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+
+import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.operator.jcajce.*;
+import org.bouncycastle.util.io.Streams;
+import org.slf4j.Logger;
+
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.runners.RunContext;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import static io.kestra.core.utils.Rethrow.throwFunction;
 
@@ -135,9 +137,13 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
         if (rSignKeys != null && !rSignKeys.isEmpty()) {
             signerKeyrings = rSignKeys.stream()
-                .map(throwFunction(key -> {
-                    try (InputStream pubKeyIn = PGPUtil.getDecoderStream(
-                        new ByteArrayInputStream(key.getBytes(StandardCharsets.UTF_8)))) {
+                .map(throwFunction(key ->
+                {
+                    try (
+                        InputStream pubKeyIn = PGPUtil.getDecoderStream(
+                            new ByteArrayInputStream(key.getBytes(StandardCharsets.UTF_8))
+                        )
+                    ) {
                         return new PGPPublicKeyRingCollection(pubKeyIn, new JcaKeyFingerprintCalculator());
                     }
                 }))
@@ -145,9 +151,10 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                 .toList();
         }
 
-
-        try (InputStream encryptedIn = PGPUtil.getDecoderStream(runContext.storage().getFile(rFrom));
-             var fileOut = new BufferedOutputStream(new FileOutputStream(outFile))) {
+        try (
+            InputStream encryptedIn = PGPUtil.getDecoderStream(runContext.storage().getFile(rFrom));
+            var fileOut = new BufferedOutputStream(new FileOutputStream(outFile))
+        ) {
 
             var pgpFactory = new PGPObjectFactory(encryptedIn, new JcaKeyFingerprintCalculator());
             Object object = pgpFactory.nextObject();
@@ -166,9 +173,11 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                 new JcePBESecretKeyDecryptorBuilder().build(rPassphrase)
             );
 
-
-            try (InputStream clear = encData.getDataStream(
-                new JcePublicKeyDataDecryptorFactoryBuilder().build(privateKey))) {
+            try (
+                InputStream clear = encData.getDataStream(
+                    new JcePublicKeyDataDecryptorFactoryBuilder().build(privateKey)
+                )
+            ) {
 
                 PGPObjectFactory plainFactory = new PGPObjectFactory(clear, new JcaKeyFingerprintCalculator());
                 Object message = plainFactory.nextObject();

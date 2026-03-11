@@ -1,27 +1,27 @@
 package io.kestra.plugin.crypto.openpgp;
 
+import java.io.*;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.*;
+
+import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
+import org.bouncycastle.openpgp.operator.jcajce.*;
+
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.bouncycastle.bcpg.ArmoredOutputStream;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.openpgp.*;
-import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
-import org.bouncycastle.openpgp.operator.jcajce.*;
-import org.slf4j.Logger;
-
-import java.io.*;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.util.*;
 
 @SuperBuilder
 @ToString
@@ -166,9 +166,11 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
 
         }
 
-        try (OutputStream fileOut = new BufferedOutputStream(new FileOutputStream(outFile));
-             var armoredOut = new ArmoredOutputStream(fileOut);
-             InputStream input = runContext.storage().getFile(rFrom)) {
+        try (
+            OutputStream fileOut = new BufferedOutputStream(new FileOutputStream(outFile));
+            var armoredOut = new ArmoredOutputStream(fileOut);
+            InputStream input = runContext.storage().getFile(rFrom)
+        ) {
 
             var encryptor = new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
                 .setWithIntegrityPacket(true)
@@ -185,8 +187,11 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
                     }
 
                     PGPLiteralDataGenerator literalGen = new PGPLiteralDataGenerator();
-                    try (var literalOut = literalGen.open(
-                        compressedOut, PGPLiteralData.BINARY, "data", new Date(), new byte[4096])) {
+                    try (
+                        var literalOut = literalGen.open(
+                            compressedOut, PGPLiteralData.BINARY, "data", new Date(), new byte[4096]
+                        )
+                    ) {
 
                         int ch;
                         while ((ch = input.read()) >= 0) {

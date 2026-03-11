@@ -1,15 +1,17 @@
 package io.kestra.plugin.crypto.openpgp;
 
+import java.security.Provider;
+import java.security.Security;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import io.kestra.core.models.tasks.Task;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-
-import java.security.Provider;
-import java.security.Security;
 
 @SuperBuilder
 @ToString
