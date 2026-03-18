@@ -1,0 +1,171 @@
+id: all_crypto
+namespace: sanitychecks.plugin-crypto
+
+tasks:
+  - id: write_message
+    type: io.kestra.plugin.core.storage.Write
+    content: |
+      hello from crypto sanity check
+    extension: .txt
+
+  - id: encrypt
+    type: io.kestra.plugin.crypto.openpgp.Encrypt
+    from: "{{ outputs.write_message.uri }}"
+    key: |
+      -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+      mI0EXwXqIQEEAPSxyj3xtaZb0OiMsxonvE1lqGpdw+6m5itrlrI2RMVmcu7IPHus
+      rHLvKGn3bf7v7Hqqqdv1TGdbP3yc1dDMhS8eOjj5izRhan0RiJz8Q6+jHehik/NL
+      93jLK1B91lfxJBxf9MOBeUEDbSZmuvbO4nR/TgiOuqUdrpCtC4zi9llZABEBAAG0
+      Kktlc3RyYSAoZm9yIHVuaXQgdGVzdCkgPGNvbnRhY3RAa2VzdHJhLmlvPojOBBMB
+      CgA4FiEEhTP2PyS9XZofDjQ/b1uL5KQxpnkFAl8F6iECGy8FCwkIBwIGFQoJCAsC
+      BBYCAwECHgECF4AACgkQb1uL5KQxpnncIgP/XecnKkUXcfgYirY1sGGkSIBLugPs
+      gvNm8ZoyZGfbdGMveApU6jTw2eWzKYGoRQikr+HU2rRakB+oOzUFq9dk229g31jT
+      pxNVPnsYQFcK9tcf+acbxUnmyhJrU6SWhj6bAXvCT9Yk9vnRNuVKUocMEfwmROmg
+      4Jo7d+ny+W8aEly5AQ0EXwXqIRAEAJcfCDsBMT/wSztZNk4K7UtdzZveGt1xYgsa
+      /x5bGEYBhlV/rmxmEVJRSpMPjqPWDqhQSo2B25BcHim60jJBneYXCyCx7buCRVwa
+      dZbigXzFwhvJNlYf9ezaBsNqWY+Y80xR0cCgeSX6t+RKFlfd2+HDWXA1S7Y22KSz
+      lgRlv1inAAMFA/9SnehaaWjV+EwI60vcGzckecQOHNAyhP0Gcl3ngtPFgfXoI69B
+      MWHl0nDMpSyitbwrxER4fy/lvIx9y53/Jr0PSACHvIi4g1bjsewggxLmleKdAz5D
+      2NGBjnol2j8UTjKMqG2ASJBXySIfltDAUYqaTR6Io3kGt13upmzUn65EJoi2BBgB
+      CgAgFiEEhTP2PyS9XZofDjQ/b1uL5KQxpnkFAl8F6iECGwwACgkQb1uL5KQxpnk1
+      VAQA1DUC/PjnFi59knBze5L+wb35ETDRJOt9MUQhh6bCNMV7/HvaqvS/J3hz8yjf
+      HenbXhjsXciFic1L80Lr5CBznvCUDiJc/g/P1TW9GYLRR6atUxaweZv4OZZj5Wi8
+      Ol5B5Fn4GOB+AYkvyG3A8eWT3S5Z8MELu9W1VHmqOOpGVPg=
+      =YOzS
+      -----END PGP PUBLIC KEY BLOCK-----
+    recipients:
+      - contact@kestra.io
+    signPublicKey: |
+      -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+      mI0EXwXqEgEEANUClfCovEG76EAGXsaA1/NVZvqyKxX7jiQl5b2/SfUOiBaKt6x2
+      6LpLdaNEE8Ibpq77drpQNM+FTqBpRlgoNe5xeTlYcjuIOXTOBWtjqpkePvJS69wR
+      JVwwfcBQuq88WI6/TAo0FbSA8O2l48Ant6znKKGqPegwU2t6hv6LMrcDABEBAAG0
+      KEtlc3RyYSAoZm9yIHVuaXQgdGVzdCkgPGhlbGxvQGtlc3RyYS5pbz6IzgQTAQoA
+      OBYhBMVlB8ByvOZ2t6wJOs2mOzhm2UadBQJfBeoSAhsvBQsJCAcCBhUKCQgLAgQW
+      AgMBAh4BAheAAAoJEM2mOzhm2UadRbMD/3uAdwH2lNlV1pXse+nHrpy8ZkjyOpyk
+      q41ixTVg/kmjtwEqH2Ba0g4DhjMJQEUaXuF/i2wjIcB5uf3HS/CdlFsTWZwvcbDW
+      UjACDZGA1HEo3HYKqoNwddMoEfWqOPRUJwJgqZsiVDu0HIdBqNU3vBb5UtDJfB+R
+      /o/NDoU/pu0duQENBF8F6hIQBACFmUvO+LIXit2h7S+uT7jvcBheIRa1stcu1osn
+      U9swh72bQUZeIySIKZ00pVdnPtUI/IR/jJQl4WxLxUZP2FrxPLc/bUe82JnS02ku
+      WHeivJYbeOSSyl+5sj7qhCiw1pmy1PLbtHkfKS+p9xLGFjL6dD9B0VbNLwfELmO3
+      K+6udwADBQP8C4TYdXUkqV9KZqzTKQHTaPD7DGHDLD12O+P2HzLvcKS/4ncO3JGQ
+      pg1v1jOr0cOqCtHD/i6g+fDWCK4Yo0WKoExZd1UDlF7v1wZ0WDWdJ1JX33RDwCCW
+      Fu4isWL0dq235KOv7kI6DQ1lB/43ZCD60CC+Nq0cNYHLbiI+neS4XK+ItgQYAQoA
+      IBYhBMVlB8ByvOZ2t6wJOs2mOzhm2UadBQJfBeoSAhsMAAoJEM2mOzhm2UadZ6cD
+      /1HpHBEkszo/MwkiKOu/6QrZtetADvctBeslkJ+jWQaGrv7OdT97yf4hOoVOLR/u
+      ZYHyGkQk7qeXlR1C+nnMe9UzkaIAplA2+xJDb9eyiFeZiMV53xeTrXgcYzDE4np5
+      iwqglrBom+ZFmE3fzKAj+BBi+HDDH9pETwrAmia7t/9Z
+      =f4t1
+      -----END PGP PUBLIC KEY BLOCK-----
+    signPrivateKey: |
+      -----BEGIN PGP PRIVATE KEY BLOCK-----
+
+      lQIGBF8F6hIBBADVApXwqLxBu+hABl7GgNfzVWb6sisV+44kJeW9v0n1DogWires
+      dui6S3WjRBPCG6au+3a6UDTPhU6gaUZYKDXucXk5WHI7iDl0zgVrY6qZHj7yUuvc
+      ESVcMH3AULqvPFiOv0wKNBW0gPDtpePAJ7es5yihqj3oMFNreob+izK3AwARAQAB
+      /gcDAlUnGupXI+Rh/xNP0parvHJJT5AC4npJICxt7IWHS+KTXf0X43ygk14Yh2yJ
+      mABGmhxYeaSD0em2KEeUDp9lFjYSbh6sfL+QvYAoEI+hJNWybfKMiANwbo+pto/j
+      N7v+nmIxc1RS9JR8Gpd95Xmk+LzG9HR9X1gapz71Nmp8PAWCRRHDe4ZDHYSrVDwf
+      rIVrrN5fMU1oEq5Y6e5+eSVQisjfE3hJoA5tud+NLntVNtzSeSl9ClNx1fMHK39b
+      KI+nYbBfauFc05zIG0KgLo+09B7swu+ox4n7rJkTm1TEVbkhtbP8XalgzHgGD+lN
+      n7R212FmRSmrXUBd6iZHA0JD1mOraOaZjrdjDRKWcelpMUkipC2ZbSxSuEQATvJ3
+      t8tmW+ek/kln07Y20cMgZNFORkpWh2hlGw/0s1zsqs9m8/AcPG0PyoeewN9rnqWn
+      eIzMWMN8r4Bl9kI4ZBt0uXN924coJyChkN39VP12/6ZDxRxTmjRO/fe0KEtlc3Ry
+      YSAoZm9yIHVuaXQgdGVzdCkgPGhlbGxvQGtlc3RyYS5pbz6IzgQTAQoAOBYhBMVl
+      B8ByvOZ2t6wJOs2mOzhm2UadBQJfBeoSAhsvBQsJCAcCBhUKCQgLAgQWAgMBAh4B
+      AheAAAoJEM2mOzhm2UadRbMD/3uAdwH2lNlV1pXse+nHrpy8ZkjyOpykq41ixTVg
+      /kmjtwEqH2Ba0g4DhjMJQEUaXuF/i2wjIcB5uf3HS/CdlFsTWZwvcbDWUjACDZGA
+      1HEo3HYKqoNwddMoEfWqOPRUJwJgqZsiVDu0HIdBqNU3vBb5UtDJfB+R/o/NDoU/
+      pu0dnQFgBF8F6hIQBACFmUvO+LIXit2h7S+uT7jvcBheIRa1stcu1osnU9swh72b
+      QUZeIySIKZ00pVdnPtUI/IR/jJQl4WxLxUZP2FrxPLc/bUe82JnS02kuWHeivJYb
+      eOSSyl+5sj7qhCiw1pmy1PLbtHkfKS+p9xLGFjL6dD9B0VbNLwfELmO3K+6udwAD
+      BQP8C4TYdXUkqV9KZqzTKQHTaPD7DGHDLD12O+P2HzLvcKS/4ncO3JGQpg1v1jOr
+      0cOqCtHD/i6g+fDWCK4Yo0WKoExZd1UDlF7v1wZ0WDWdJ1JX33RDwCCWFu4isWL0
+      dq235KOv7kI6DQ1lB/43ZCD60CC+Nq0cNYHLbiI+neS4XK/+BwMCeJMU8E5trGn/
+      giwmAgitZH/jWan/oRe+Yd3usLctFHXgYQNmWXMapQw0ME6VXu1E2PlrR2P3s/8Y
+      reliX4DkCUT/g7nYmnW45IM0IYXX7Yi2BBgBCgAgFiEExWUHwHK85na3rAk6zaY7
+      OGbZRp0FAl8F6hICGwwACgkQzaY7OGbZRp1npwP/UekcESSzOj8zCSIo67/pCtm1
+      60AO9y0F6yWQn6NZBoau/s51P3vJ/iE6hU4tH+5lgfIaRCTup5eVHUL6ecx71TOR
+      ogCmUDb7EkNv17KIV5mIxXnfF5OteBxjMMTienmLCqCWsGib5kWYTd/MoCP4EGL4
+      cMMf2kRPCsCaJru3/1k=
+      =E7NI
+      -----END PGP PRIVATE KEY BLOCK-----
+    signPassphrase: abc456
+    signUser: hello@kestra.io
+
+  - id: decrypt
+    type: io.kestra.plugin.crypto.openpgp.Decrypt
+    from: "{{ outputs.encrypt.uri }}"
+    privateKey: |
+      -----BEGIN PGP PRIVATE KEY BLOCK-----
+
+      lQIGBF8F6iEBBAD0sco98bWmW9DojLMaJ7xNZahqXcPupuYra5ayNkTFZnLuyDx7
+      rKxy7yhp923+7+x6qqnb9UxnWz98nNXQzIUvHjo4+Ys0YWp9EYic/EOvox3oYpPz
+      S/d4yytQfdZX8SQcX/TDgXlBA20mZrr2zuJ0f04IjrqlHa6QrQuM4vZZWQARAQAB
+      /gcDAn+YfW3qeY0F/wa3YDoXd6+16kdGytCmQVzeex2ExbZPQjbEWgkKA4eL3gGf
+      Dlm/I58Fr4Xik8xYFlPar8ZOTbHzKnd0XHHgdpfqFhu1epWxHota6DlUPI+GUnPm
+      GfLesV+ALvztC7M5TLrk6jNQMPEJyQXwB/DTnnufd05eAjKZ1LCAtpzShZikQuc9
+      2XeFxhefbcWbi5jQa7Ownd6oQolDcNQSOvN9ATDkd+4sq5yxtw84dLZXPVEq5woI
+      pBJEcLfu1quml9+XQPo/bFBcPGqFunANBuBwFoCeGgAAcZ83ZA/Ei9BaeHPSfPWf
+      3C9rB63BLjs4/HpzL9LAKjl+Lwy/hmvAdtEOVOrIumAWyPnknEL7PVYECfRP+EXk
+      1zojoCERrvpYi4RBSk4AQZExnNN9sOPxIjP/IYUauTe1aCjRiJdrFr2AzVwswUeS
+      mCgkiF5hCQwa6as3gQXhpX4cbWD0KouMqnzehHxNRcI3TnH10HtY8ni0Kktlc3Ry
+      YSAoZm9yIHVuaXQgdGVzdCkgPGNvbnRhY3RAa2VzdHJhLmlvPojOBBMBCgA4FiEE
+      hTP2PyS9XZofDjQ/b1uL5KQxpnkFAl8F6iECGy8FCwkIBwIGFQoJCAsCBBYCAwEC
+      HgECF4AACgkQb1uL5KQxpnncIgP/XecnKkUXcfgYirY1sGGkSIBLugPsgvNm8Zoy
+      ZGfbdGMveApU6jTw2eWzKYGoRQikr+HU2rRakB+oOzUFq9dk229g31jTpxNVPnsY
+      QFcK9tcf+acbxUnmyhJrU6SWhj6bAXvCT9Yk9vnRNuVKUocMEfwmROmg4Jo7d+ny
+      +W8aElydAV8EXwXqIRAEAJcfCDsBMT/wSztZNk4K7UtdzZveGt1xYgsa/x5bGEYB
+      hlV/rmxmEVJRSpMPjqPWDqhQSo2B25BcHim60jJBneYXCyCx7buCRVwadZbigXzF
+      whvJNlYf9ezaBsNqWY+Y80xR0cCgeSX6t+RKFlfd2+HDWXA1S7Y22KSzlgRlv1in
+      AAMFA/9SnehaaWjV+EwI60vcGzckecQOHNAyhP0Gcl3ngtPFgfXoI69BMWHl0nDM
+      pSyitbwrxER4fy/lvIx9y53/Jr0PSACHvIi4g1bjsewggxLmleKdAz5D2NGBjnol
+      2j8UTjKMqG2ASJBXySIfltDAUYqaTR6Io3kGt13upmzUn65EJv4HAwI+8bKCZFX/
+      wf/9Mfbtr8/Svy3Gsc/YjnA8LIqQhTk7Ii2422WMUZiiBq6Vn1tp7HynEP8C+EUS
+      bzjRwfEdqPV76FAdVoM1L41LlR9ewXaItgQYAQoAIBYhBIUz9j8kvV2aHw40P29b
+      i+SkMaZ5BQJfBeohAhsMAAoJEG9bi+SkMaZ5NVQEANQ1Avz45xYufZJwc3uS/sG9
+      +REw0STrfTFEIYemwjTFe/x72qr0vyd4c/Mo3x3p214Y7F3IhYnNS/NC6+Qgc57w
+      lA4iXP4Pz9U1vRmC0UemrVMWsHmb+DmWY+VovDpeQeRZ+BjgfgGJL8htwPHlk90u
+      WfDBC7vVtVR5qjjqRlT4
+      =7IVv
+      -----END PGP PRIVATE KEY BLOCK-----
+    privateKeyPassphrase: abc456
+    signUsersKey:
+      - |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+        mI0EXwXqEgEEANUClfCovEG76EAGXsaA1/NVZvqyKxX7jiQl5b2/SfUOiBaKt6x2
+        6LpLdaNEE8Ibpq77drpQNM+FTqBpRlgoNe5xeTlYcjuIOXTOBWtjqpkePvJS69wR
+        JVwwfcBQuq88WI6/TAo0FbSA8O2l48Ant6znKKGqPegwU2t6hv6LMrcDABEBAAG0
+        KEtlc3RyYSAoZm9yIHVuaXQgdGVzdCkgPGhlbGxvQGtlc3RyYS5pbz6IzgQTAQoA
+        OBYhBMVlB8ByvOZ2t6wJOs2mOzhm2UadBQJfBeoSAhsvBQsJCAcCBhUKCQgLAgQW
+        AgMBAh4BAheAAAoJEM2mOzhm2UadRbMD/3uAdwH2lNlV1pXse+nHrpy8ZkjyOpyk
+        q41ixTVg/kmjtwEqH2Ba0g4DhjMJQEUaXuF/i2wjIcB5uf3HS/CdlFsTWZwvcbDW
+        UjACDZGA1HEo3HYKqoNwddMoEfWqOPRUJwJgqZsiVDu0HIdBqNU3vBb5UtDJfB+R
+        /o/NDoU/pu0duQENBF8F6hIQBACFmUvO+LIXit2h7S+uT7jvcBheIRa1stcu1osn
+        U9swh72bQUZeIySIKZ00pVdnPtUI/IR/jJQl4WxLxUZP2FrxPLc/bUe82JnS02ku
+        WHeivJYbeOSSyl+5sj7qhCiw1pmy1PLbtHkfKS+p9xLGFjL6dD9B0VbNLwfELmO3
+        K+6udwADBQP8C4TYdXUkqV9KZqzTKQHTaPD7DGHDLD12O+P2HzLvcKS/4ncO3JGQ
+        pg1v1jOr0cOqCtHD/i6g+fDWCK4Yo0WKoExZd1UDlF7v1wZ0WDWdJ1JX33RDwCCW
+        Fu4isWL0dq235KOv7kI6DQ1lB/43ZCD60CC+Nq0cNYHLbiI+neS4XK+ItgQYAQoA
+        IBYhBMVlB8ByvOZ2t6wJOs2mOzhm2UadBQJfBeoSAhsMAAoJEM2mOzhm2UadZ6cD
+        /1HpHBEkszo/MwkiKOu/6QrZtetADvctBeslkJ+jWQaGrv7OdT97yf4hOoVOLR/u
+        ZYHyGkQk7qeXlR1C+nnMe9UzkaIAplA2+xJDb9eyiFeZiMV53xeTrXgcYzDE4np5
+        iwqglrBom+ZFmE3fzKAj+BBi+HDDH9pETwrAmia7t/9Z
+        =f4t1
+        -----END PGP PUBLIC KEY BLOCK-----
+    requiredSignerUsers:
+      - hello@kestra.io
+
+  - id: assert
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.encrypt.uri is not null }}"
+      - "{{ outputs.decrypt.uri is not null }}"
+      - "{{ (read(outputs.decrypt.uri) | trim) == (read(outputs.write_message.uri) | trim) }}"
+
+finally:
+  - id: purge
+    type: io.kestra.plugin.core.storage.PurgeCurrentExecutionFiles
