@@ -89,13 +89,14 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         title = "Source file to encrypt",
         description = "Kestra internal storage URI or templated path to the cleartext file."
     )
-    @PluginProperty(internalStorageURI = true)
+    @PluginProperty(internalStorageURI = true, group = "source")
     private Property<String> from;
 
     @Schema(
         title = "Public key for encryption",
         description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used."
     )
+    @PluginProperty(group = "connection")
     private Property<String> key;
 
     @Schema(
@@ -103,30 +104,35 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         description = "Required metadata for compatibility; values are not validated against the provided key."
     )
     @NotNull
+    @PluginProperty(group = "main")
     private Property<List<String>> recipients;
 
     @Schema(
         title = "Public key used for signature metadata",
         description = "Optional ASCII-armored export; kept for compatibility with legacy plugin expectations."
     )
+    @PluginProperty(group = "connection")
     private Property<String> signPublicKey;
 
     @Schema(
         title = "Private key for signing",
         description = "ASCII-armored secret key used to sign the encrypted payload."
     )
+    @PluginProperty(group = "connection")
     private Property<String> signPrivateKey;
 
     @Schema(
         title = "Passphrase for signing key",
         description = "Leave empty if the signing key is not protected."
     )
+    @PluginProperty(group = "advanced")
     protected Property<String> signPassphrase;
 
     @Schema(
         title = "User ID bound to the signature",
         description = "Required when signing; identifies the signing key within the secret key ring."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> signUser;
 
     @Override
