@@ -88,31 +88,35 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
         title = "Source file to decrypt",
         description = "Kestra internal storage URI or templated path to the encrypted message."
     )
-    @PluginProperty(internalStorageURI = true)
+    @PluginProperty(internalStorageURI = true, group = "source")
     private Property<String> from;
 
     @Schema(
         title = "Private key for decryption",
         description = "ASCII-armored secret key export such as `gpg --export-secret-key -a`; the first key ring found is used."
     )
+    @PluginProperty(group = "connection")
     private Property<String> privateKey;
 
     @Schema(
         title = "Passphrase for private key",
         description = "Leave empty for unprotected keys; required for most secret keys."
     )
+    @PluginProperty(group = "connection")
     protected Property<String> privateKeyPassphrase;
 
     @Schema(
         title = "Allowed signer public keys",
         description = "Optional list of ASCII-armored public keys used to verify one-pass signatures."
     )
+    @PluginProperty(group = "connection")
     private Property<List<String>> signUsersKey;
 
     @Schema(
         title = "Required signer user IDs",
         description = "If set, verification fails unless the signature user ID matches one of these values; ignored when no signature is present."
     )
+    @PluginProperty(group = "advanced")
     private Property<List<String>> requiredSignerUsers;
 
     @Override
