@@ -76,7 +76,7 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
                     privateKeyPassphrase: my-passphrase
                     signUsersKey:
                       - |
-                        -----BEGIN PGP PRIVATE KEY BLOCK-----
+                        -----BEGIN PGP PUBLIC KEY BLOCK-----
                     requiredSignerUsers:
                       - signer@kestra.io
                 """
