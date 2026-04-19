@@ -7,8 +7,9 @@
 
 ## Why
 
-- This plugin integrates Kestra with Cryptography.
-- It provides tasks that secure files in Kestra pipelines using OpenPGP encryption, decryption, and signature validation.
+- What user problem does this solve? Teams need to secure files in Kestra pipelines using OpenPGP encryption, decryption, and signature validation from orchestrated workflows instead of relying on manual console work, ad hoc scripts, or disconnected schedulers.
+- Why would a team adopt this plugin in a workflow? It keeps Cryptography steps in the same Kestra flow as upstream preparation, approvals, retries, notifications, and downstream systems.
+- What operational/business outcome does it enable? It reduces manual handoffs and fragmented tooling while improving reliability, traceability, and delivery speed for processes that depend on Cryptography.
 
 ## How
 
