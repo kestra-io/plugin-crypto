@@ -118,14 +118,14 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         title = "Private key for signing",
         description = "ASCII-armored secret key used to sign the encrypted payload."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(secret = true, group = "connection")
     private Property<String> signPrivateKey;
 
     @Schema(
         title = "Passphrase for signing key",
         description = "Leave empty if the signing key is not protected."
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(secret = true, group = "advanced")
     protected Property<String> signPassphrase;
 
     @Schema(
