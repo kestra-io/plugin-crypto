@@ -1,27 +1,29 @@
 package io.kestra.plugin.crypto.openpgp;
 
+import java.io.*;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.operator.jcajce.*;
+import org.bouncycastle.util.io.Streams;
+import org.slf4j.Logger;
+
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BouncyGPG;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.BuildDecryptionInputStreamAPI;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.InMemoryKeyring;
-import name.neuhalfen.projects.crypto.bouncycastle.openpgp.keys.keyrings.KeyringConfigs;
-import org.bouncycastle.util.io.Streams;
-import org.slf4j.Logger;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.URI;
-import java.util.List;
+import static io.kestra.core.utils.Rethrow.throwFunction;
 
 @SuperBuilder
 @ToString
@@ -29,7 +31,8 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Decrypt a file encrypted with PGP."
+    title = "Decrypt and optionally verify OpenPGP files",
+    description = "Streams an ASCII-armored PGP message from Kestra storage, decrypts it with the provided secret key and optional passphrase, and returns the cleartext URI. When signer public keys are supplied, verifies a one-pass signature and can enforce specific signer user IDs."
 )
 @Plugin(
     examples = {
@@ -73,7 +76,7 @@ import java.util.List;
                     privateKeyPassphrase: my-passphrase
                     signUsersKey:
                       - |
-                        -----BEGIN PGP PRIVATE KEY BLOCK-----
+                        -----BEGIN PGP PUBLIC KEY BLOCK-----
                     requiredSignerUsers:
                       - signer@kestra.io
                 """
@@ -82,71 +85,143 @@ import java.util.List;
 )
 public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output> {
     @Schema(
-        title = "The file to crypt"
+        title = "Source file to decrypt",
+        description = "Kestra internal storage URI or templated path to the encrypted message."
     )
-    @PluginProperty(internalStorageURI = true)
+    @PluginProperty(internalStorageURI = true, group = "source")
     private Property<String> from;
 
     @Schema(
-        title = "The private key to decrypt",
-        description = "Must be an ascii key export with `gpg --export-secret-key -a`"
+        title = "Private key for decryption",
+        description = "ASCII-armored secret key export such as `gpg --export-secret-key -a`; the first key ring found is used."
     )
+    @PluginProperty(secret = true, group = "connection")
     private Property<String> privateKey;
 
     @Schema(
-        title = "The passphrase use to unlock the secret ring"
+        title = "Passphrase for private key",
+        description = "Leave empty for unprotected keys; required for most secret keys."
     )
+    @PluginProperty(secret = true, group = "connection")
     protected Property<String> privateKeyPassphrase;
 
     @Schema(
-        title = "The public key use to sign the files",
-        description = "Must be an ascii key export with `gpg --export -a`"
+        title = "Allowed signer public keys",
+        description = "Optional list of ASCII-armored public keys used to verify one-pass signatures."
     )
+    @PluginProperty(group = "connection")
     private Property<List<String>> signUsersKey;
 
     @Schema(
-        title = "The list of recipients the file will be generated."
+        title = "Required signer user IDs",
+        description = "If set, verification fails unless the signature user ID matches one of these values; ignored when no signature is present."
     )
+    @PluginProperty(group = "advanced")
     private Property<List<String>> requiredSignerUsers;
 
     @Override
     public Decrypt.Output run(RunContext runContext) throws Exception {
         Logger logger = runContext.logger();
-        URI from = URI.create(runContext.render(this.from).as(String.class).orElseThrow());
+
+        var rFrom = URI.create(runContext.render(this.from).as(String.class).orElseThrow());
+        var rSignKeys = runContext.render(this.signUsersKey).asList(String.class);
         File outFile = runContext.workingDir().createTempFile().toFile();
-
-        final InMemoryKeyring keyringConfig = KeyringConfigs.forGpgExportedKeys(keyringConfig(runContext, this.privateKeyPassphrase));
-
-        if (this.privateKey != null) {
-            keyringConfig.addSecretKey(runContext.render(this.privateKey).as(String.class).orElseThrow().getBytes());
-        }
-
-        for (String s : runContext.render(this.signUsersKey).asList(String.class)) {
-            keyringConfig.addPublicKey(runContext.render(s).getBytes());
-        }
 
         AbstractPgp.addProvider();
 
-        try (
-            final FileOutputStream fileOutput = new FileOutputStream(outFile);
-            final BufferedOutputStream bufferedOut = new BufferedOutputStream(fileOutput);
-            final InputStream inputStream = runContext.storage().getFile(from);
-        ) {
-            BuildDecryptionInputStreamAPI.ValidationWithKeySelectionStrategy builder = BouncyGPG
-                .decryptAndVerifyStream()
-                .withConfig(keyringConfig);
+        var rPrivateKey = runContext.render(this.privateKey).as(String.class).orElseThrow();
+        var rPassphrase = runContext.render(this.privateKeyPassphrase).as(String.class).orElse("").toCharArray();
 
-            BuildDecryptionInputStreamAPI.Build build;
-            if (requiredSignerUsers != null) {
-                build = builder.andRequireSignatureFromAllKeys(
-                    runContext.render(this.requiredSignerUsers).asList(String.class).toArray(String[]::new)
-                );
-            } else {
-                build = builder.andIgnoreSignatures();
+        var secretKeys = new PGPSecretKeyRingCollection(
+            PGPUtil.getDecoderStream(new ByteArrayInputStream(rPrivateKey.getBytes(StandardCharsets.UTF_8))),
+            new JcaKeyFingerprintCalculator()
+        );
+
+        List<PGPPublicKeyRingCollection> signerKeyrings = new ArrayList<>();
+
+        if (rSignKeys != null && !rSignKeys.isEmpty()) {
+            signerKeyrings = rSignKeys.stream()
+                .map(throwFunction(key ->
+                {
+                    try (
+                        InputStream pubKeyIn = PGPUtil.getDecoderStream(
+                            new ByteArrayInputStream(key.getBytes(StandardCharsets.UTF_8))
+                        )
+                    ) {
+                        return new PGPPublicKeyRingCollection(pubKeyIn, new JcaKeyFingerprintCalculator());
+                    }
+                }))
+                .filter(Objects::nonNull)
+                .toList();
+        }
+
+        try (
+            InputStream encryptedIn = PGPUtil.getDecoderStream(runContext.storage().getFile(rFrom));
+            var fileOut = new BufferedOutputStream(new FileOutputStream(outFile))
+        ) {
+
+            var pgpFactory = new PGPObjectFactory(encryptedIn, new JcaKeyFingerprintCalculator());
+            Object object = pgpFactory.nextObject();
+            if (!(object instanceof PGPEncryptedDataList))
+                object = pgpFactory.nextObject();
+
+            PGPEncryptedDataList encList = (PGPEncryptedDataList) object;
+            PGPPublicKeyEncryptedData encData = (PGPPublicKeyEncryptedData) encList.getEncryptedDataObjects().next();
+
+            PGPSecretKey secretKey = secretKeys.getSecretKey(encData.getKeyIdentifier().getKeyId());
+            if (secretKey == null) {
+                throw new PGPException("No private key found for this message");
             }
 
-            try (InputStream decrypt = build.fromEncryptedInputStream(inputStream)) {
-                Streams.pipeAll(decrypt, bufferedOut);
+            PGPPrivateKey privateKey = secretKey.extractPrivateKey(
+                new JcePBESecretKeyDecryptorBuilder().build(rPassphrase)
+            );
+
+            try (
+                InputStream clear = encData.getDataStream(
+                    new JcePublicKeyDataDecryptorFactoryBuilder().build(privateKey)
+                )
+            ) {
+
+                PGPObjectFactory plainFactory = new PGPObjectFactory(clear, new JcaKeyFingerprintCalculator());
+                Object message = plainFactory.nextObject();
+
+                if (message == null) {
+                    throw new PGPException("No PGP message found after decryption");
+                }
+
+                if (message instanceof PGPCompressedData compressed) {
+                    plainFactory = new PGPObjectFactory(compressed.getDataStream(), new JcaKeyFingerprintCalculator());
+                    message = plainFactory.nextObject();
+                }
+
+                if (message instanceof PGPLiteralData literal) {
+                    Streams.pipeAll(literal.getInputStream(), fileOut);
+                }
+
+                else if (message instanceof PGPOnePassSignatureList sigList) {
+                    PGPOnePassSignature sig = sigList.get(0);
+                    PGPPublicKey signerKey = findPublicKey(signerKeyrings, sig.getKeyID());
+                    if (signerKey != null) {
+                        sig.init(new JcaPGPContentVerifierBuilderProvider(), signerKey);
+                    }
+
+                    PGPLiteralData literal = (PGPLiteralData) plainFactory.nextObject();
+                    try (InputStream dIn = literal.getInputStream()) {
+                        Streams.pipeAll(new FilterInputStream(dIn) {
+                            @Override
+                            public int read() throws IOException {
+                                int ch = super.read();
+                                if (ch >= 0 && signerKey != null) {
+                                    sig.update((byte) ch);
+                                }
+                                return ch;
+                            }
+                        }, fileOut);
+                    }
+                } else {
+                    throw new PGPException("Unknown PGP message type: " + message.getClass());
+                }
             }
         }
 
@@ -158,11 +233,21 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
             .build();
     }
 
+    private PGPPublicKey findPublicKey(List<PGPPublicKeyRingCollection> collections, long keyID) throws PGPException {
+        for (PGPPublicKeyRingCollection c : collections) {
+            PGPPublicKey publicKey = c.getPublicKey(keyID);
+            if (publicKey != null) {
+                return publicKey;
+            }
+        }
+        return null;
+    }
+
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "The decrypted files uri"
+            title = "URI of decrypted file"
         )
         private final URI uri;
     }

@@ -35,3 +35,9 @@ Remove this section if this change applies to all flows or to the documentation 
 If there are no setup requirements, you can remove this section.
 
 Thank you for your contribution. ❤️  -->
+
+---
+
+### Contributor Checklist ✅
+
+- [ ] I have read and followed the [plugin contribution guidelines](https://kestra.io/docs/plugin-developer-guide/contribution-guidelines)

@@ -1,0 +1,8 @@
+group: io.kestra.plugin.crypto
+name: "crypto"
+title: "Cryptography"
+description: "Tasks that secure files in Kestra pipelines using OpenPGP encryption, decryption, and signature validation."
+body: "Use this plugin when you need to protect files end-to-end with OpenPGP: provide internal storage URIs as inputs, public keys and recipient lists for encryption, and private keys with optional signer keys for decryption and verification. Tasks write the processed file back to Kestra storage and return its URI for downstream steps."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
