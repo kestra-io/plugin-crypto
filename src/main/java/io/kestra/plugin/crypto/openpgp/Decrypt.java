@@ -51,9 +51,8 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
                   - id: decrypt
                     type: io.kestra.plugin.crypto.openpgp.Decrypt
                     from: "{{ inputs.file }}"
-                    privateKey: |
-                      -----BEGIN PGP PRIVATE KEY BLOCK-----
-                    privateKeyPassphrase: my-passphrase
+                    privateKey: "{{ secret('PGP_PRIVATE_KEY') }}"
+                    privateKeyPassphrase: "{{ secret('PGP_PRIVATE_KEY_PASSPHRASE') }}"
                 """
         ),
         @Example(
@@ -71,9 +70,8 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
                   - id: decrypt
                     type: io.kestra.plugin.crypto.openpgp.Decrypt
                     from: "{{ inputs.file }}"
-                    privateKey: |
-                      -----BEGIN PGP PRIVATE KEY BLOCK-----
-                    privateKeyPassphrase: my-passphrase
+                    privateKey: "{{ secret('PGP_PRIVATE_KEY') }}"
+                    privateKeyPassphrase: "{{ secret('PGP_PRIVATE_KEY_PASSPHRASE') }}"
                     signUsersKey:
                       - |
                         -----BEGIN PGP PUBLIC KEY BLOCK-----
