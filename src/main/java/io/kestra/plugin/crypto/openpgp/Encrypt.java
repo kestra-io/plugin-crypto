@@ -76,9 +76,8 @@ import lombok.experimental.SuperBuilder;
                       - hello@kestra.io
                     signPublicKey: |
                       -----BEGIN PGP PUBLIC KEY BLOCK----- ...
-                    signPrivateKey: |
-                      -----BEGIN PGP PRIVATE KEY BLOCK-----
-                    signPassphrase: my-passphrase
+                    signPrivateKey: "{{ secret('PGP_SIGN_PRIVATE_KEY') }}"
+                    signPassphrase: "{{ secret('PGP_SIGN_PASSPHRASE') }}"
                     signUser: signer@kestra.io
                 """
         )
