@@ -93,6 +93,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
         title = "Private key for decryption",
         description = "ASCII-armored secret key export such as `gpg --export-secret-key -a`; the first key ring found is used."
     )
+    @ToString.Exclude
     @PluginProperty(secret = true, group = "connection")
     private Property<String> privateKey;
 
@@ -100,6 +101,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
         title = "Passphrase for private key",
         description = "Leave empty for unprotected keys; required for most secret keys."
     )
+    @ToString.Exclude
     @PluginProperty(secret = true, group = "connection")
     protected Property<String> privateKeyPassphrase;
 

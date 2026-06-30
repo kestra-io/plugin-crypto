@@ -117,6 +117,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         title = "Private key for signing",
         description = "ASCII-armored secret key used to sign the encrypted payload."
     )
+    @ToString.Exclude
     @PluginProperty(secret = true, group = "connection")
     private Property<String> signPrivateKey;
 
@@ -124,6 +125,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         title = "Passphrase for signing key",
         description = "Leave empty if the signing key is not protected."
     )
+    @ToString.Exclude
     @PluginProperty(secret = true, group = "advanced")
     protected Property<String> signPassphrase;
 
