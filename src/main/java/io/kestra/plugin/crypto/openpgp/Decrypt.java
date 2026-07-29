@@ -84,14 +84,14 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output> {
     @Schema(
         title = "Source file to decrypt",
-        description = "Kestra internal storage URI or templated path to the encrypted message."
+        description = "Kestra internal storage URI or templated path to the encrypted message. Required."
     )
     @PluginProperty(internalStorageURI = true, group = "source")
     private Property<String> from;
 
     @Schema(
         title = "Private key for decryption",
-        description = "ASCII-armored secret key export such as `gpg --export-secret-key -a`; the first key ring found is used."
+        description = "ASCII-armored secret key export such as `gpg --export-secret-key -a`; the first key ring found is used. Required."
     )
     @ToString.Exclude
     @PluginProperty(secret = true, group = "connection")

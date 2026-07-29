@@ -86,14 +86,14 @@ import lombok.experimental.SuperBuilder;
 public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output> {
     @Schema(
         title = "Source file to encrypt",
-        description = "Kestra internal storage URI or templated path to the cleartext file."
+        description = "Kestra internal storage URI or templated path to the cleartext file. Required."
     )
     @PluginProperty(internalStorageURI = true, group = "source")
     private Property<String> from;
 
     @Schema(
         title = "Public key for encryption",
-        description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used."
+        description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used. Required."
     )
     @PluginProperty(group = "connection")
     private Property<String> key;
