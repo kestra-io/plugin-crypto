@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -107,14 +108,14 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
     @Schema(
         title = "Allowed signer public keys",
-        description = "Optional list of ASCII-armored public keys used to verify one-pass signatures."
+        description = "Optional list of ASCII-armored public keys used to verify the message's one-pass signature. When set, decryption fails if the message is unsigned, if the signature was not produced by one of these keys, or if the signature itself does not verify."
     )
     @PluginProperty(group = "connection")
     private Property<List<String>> signUsersKey;
 
     @Schema(
         title = "Required signer user IDs",
-        description = "If set, verification fails unless the signature user ID matches one of these values; ignored when no signature is present."
+        description = "Optional list of allowed signer identities, e.g. `signer@kestra.io`. Requires `signUsersKey` to also be set, since the signer's identity is read from the matching public key. When set, decryption fails unless the message is signed and the signer key's OpenPGP user ID contains one of these values."
     )
     @PluginProperty(group = "advanced")
     private Property<List<String>> requiredSignerUsers;
@@ -125,6 +126,13 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
         var rFrom = URI.create(runContext.render(this.from).as(String.class).orElseThrow());
         var rSignKeys = runContext.render(this.signUsersKey).asList(String.class);
+        var rRequiredSignerUsers = runContext.render(this.requiredSignerUsers).asList(String.class);
+
+        if (!rRequiredSignerUsers.isEmpty() && rSignKeys.isEmpty()) {
+            throw new PGPException("'requiredSignerUsers' requires 'signUsersKey' to be set as well, so the signer's identity can be verified against a trusted public key");
+        }
+
+        boolean signatureRequired = !rSignKeys.isEmpty();
         File outFile = runContext.workingDir().createTempFile().toFile();
 
         AbstractPgp.addProvider();
@@ -139,7 +147,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
         List<PGPPublicKeyRingCollection> signerKeyrings = new ArrayList<>();
 
-        if (rSignKeys != null && !rSignKeys.isEmpty()) {
+        if (!rSignKeys.isEmpty()) {
             signerKeyrings = rSignKeys.stream()
                 .map(throwFunction(key ->
                 {
@@ -196,28 +204,81 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                 }
 
                 if (message instanceof PGPLiteralData literal) {
+                    if (signatureRequired) {
+                        throw new PGPException("Message is not signed but a signature is required by 'signUsersKey'");
+                    }
                     Streams.pipeAll(literal.getInputStream(), fileOut);
                 }
 
                 else if (message instanceof PGPOnePassSignatureList sigList) {
+                    if (sigList.isEmpty()) {
+                        throw new PGPException("No one-pass signature found in the OpenPGP message");
+                    }
+
+                    // Only the outermost one-pass signature (the last one applied, first one encountered)
+                    // is verified; per RFC 4880 §11.3 it pairs with the LAST entry of the trailing signature list.
                     PGPOnePassSignature sig = sigList.get(0);
-                    PGPPublicKey signerKey = findPublicKey(signerKeyrings, sig.getKeyID());
-                    if (signerKey != null) {
+                    PGPPublicKeyRing signerKeyRing = findPublicKeyRing(signerKeyrings, sig.getKeyID());
+                    PGPPublicKey signerKey = signerKeyRing != null ? signerKeyRing.getPublicKey(sig.getKeyID()) : null;
+
+                    if (signerKey == null) {
+                        if (signatureRequired) {
+                            throw new PGPException(
+                                "No public key matching signer key ID " + Long.toHexString(sig.getKeyID()) + " was found in 'signUsersKey'"
+                            );
+                        }
+                    } else {
                         sig.init(new JcaPGPContentVerifierBuilderProvider(), signerKey);
                     }
 
-                    PGPLiteralData literal = (PGPLiteralData) plainFactory.nextObject();
+                    Object literalObject = plainFactory.nextObject();
+                    if (!(literalObject instanceof PGPLiteralData literal)) {
+                        throw new PGPException("Expected literal data after the one-pass signature but found " + (literalObject == null ? "end of message" : literalObject.getClass()));
+                    }
+
                     try (InputStream dIn = literal.getInputStream()) {
-                        Streams.pipeAll(new FilterInputStream(dIn) {
-                            @Override
-                            public int read() throws IOException {
-                                int ch = super.read();
-                                if (ch >= 0 && signerKey != null) {
-                                    sig.update((byte) ch);
-                                }
-                                return ch;
+                        // Streams.pipeAll reads in bulk via read(byte[], int, int), which
+                        // FilterInputStream does NOT route through an overridden read(); copy
+                        // manually so every byte is also fed into the signature.
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = dIn.read(buffer)) >= 0) {
+                            if (signerKey != null) {
+                                sig.update(buffer, 0, read);
                             }
-                        }, fileOut);
+                            fileOut.write(buffer, 0, read);
+                        }
+                    }
+
+                    if (signerKey != null) {
+                        Object signatureObject = plainFactory.nextObject();
+                        if (!(signatureObject instanceof PGPSignatureList signatureList) || signatureList.isEmpty()) {
+                            throw new PGPException("No signature packet found to verify the one-pass signature");
+                        }
+
+                        PGPSignature matchingSignature = signatureList.get(signatureList.size() - 1);
+                        if (!sig.verify(matchingSignature)) {
+                            throw new PGPException("Signature verification failed: message content does not match the signature");
+                        }
+
+                        if (!rRequiredSignerUsers.isEmpty()) {
+                            // User IDs live on the key ring's primary key, not on a signing subkey
+                            // (GPG signs with a signing subkey by default, e.g. `gpg --sign`).
+                            PGPPublicKey primaryKey = signerKeyRing.getPublicKey();
+                            List<String> signerUserIds = new ArrayList<>();
+                            (primaryKey != null ? primaryKey : signerKey).getUserIDs().forEachRemaining(signerUserIds::add);
+
+                            // OpenPGP user IDs are commonly "Name (comment) <email>"; match by
+                            // substring so a required email still matches the full user ID string.
+                            boolean matches = signerUserIds.stream()
+                                .anyMatch(userId -> rRequiredSignerUsers.stream().anyMatch(userId::contains));
+
+                            if (!matches) {
+                                throw new PGPException(
+                                    "Signer user ID(s) " + signerUserIds + " do not match any of the required signer users " + rRequiredSignerUsers
+                                );
+                            }
+                        }
                     }
                 } else {
                     throw new PGPException("Unknown PGP message type: " + message.getClass());
@@ -233,11 +294,14 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
             .build();
     }
 
-    private PGPPublicKey findPublicKey(List<PGPPublicKeyRingCollection> collections, long keyID) throws PGPException {
-        for (PGPPublicKeyRingCollection c : collections) {
-            PGPPublicKey publicKey = c.getPublicKey(keyID);
-            if (publicKey != null) {
-                return publicKey;
+    private PGPPublicKeyRing findPublicKeyRing(List<PGPPublicKeyRingCollection> collections, long keyID) {
+        for (PGPPublicKeyRingCollection collection : collections) {
+            Iterator<PGPPublicKeyRing> rings = collection.getKeyRings();
+            while (rings.hasNext()) {
+                PGPPublicKeyRing ring = rings.next();
+                if (ring.getPublicKey(keyID) != null) {
+                    return ring;
+                }
             }
         }
         return null;
