@@ -434,4 +434,74 @@ class DecryptSignatureVerificationTest {
             IOUtils.toByteArray(storageInterface.get(TenantService.MAIN_TENANT, null, decryptOutput.getUri()))
         );
     }
+
+    @Test
+    void requiredSignerUsersRejectsSignerWhoseUserIdMerelyContainsTheRequiredIdentity() throws Exception {
+        var runContext = runContextFactory.of();
+
+        var contactPublic = readResource("pgp/contact-key.pub");
+        var contactPrivate = readResource("pgp/contact-key.sec");
+
+        // a trusted key whose self-asserted user id embeds the required identity as a substring
+        var signerUserId = "Not Hello <not-hello@kestra.io>";
+        var signerMaterial = buildKeyRingWithDedicatedSigningSubkey(signerUserId, "subkey-pass".toCharArray());
+
+        var plaintext = "Signed by an impostor whose user id contains the required email".getBytes(StandardCharsets.UTF_8);
+        var message = buildEncryptedMessage(
+            contactPublic,
+            signerMaterial.signingSecretKey(),
+            signerMaterial.signingPrivateKey(),
+            plaintext,
+            plaintext
+        );
+
+        var fileStorage = storeFile(message);
+
+        var decrypt = Decrypt.builder()
+            .from(Property.ofValue(fileStorage.toString()))
+            .privateKey(Property.ofValue(contactPrivate))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .signUsersKey(Property.ofValue(Collections.singletonList(signerMaterial.armoredPublicKey())))
+            .requiredSignerUsers(Property.ofValue(Collections.singletonList("hello@kestra.io")))
+            .build();
+
+        assertThrows(PGPException.class, () -> decrypt.run(runContext));
+    }
+
+    @Test
+    void requiredSignerUsersAcceptsFullUserIdMatch() throws Exception {
+        var runContext = runContextFactory.of();
+
+        var contactPublic = readResource("pgp/contact-key.pub");
+        var contactPrivate = readResource("pgp/contact-key.sec");
+
+        var signerUserId = "Kestra Subkey Signer <subkey-signer@kestra.io>";
+        var signerMaterial = buildKeyRingWithDedicatedSigningSubkey(signerUserId, "subkey-pass".toCharArray());
+
+        var plaintext = "Signed by a key matched on its complete user id".getBytes(StandardCharsets.UTF_8);
+        var message = buildEncryptedMessage(
+            contactPublic,
+            signerMaterial.signingSecretKey(),
+            signerMaterial.signingPrivateKey(),
+            plaintext,
+            plaintext
+        );
+
+        var fileStorage = storeFile(message);
+
+        var decrypt = Decrypt.builder()
+            .from(Property.ofValue(fileStorage.toString()))
+            .privateKey(Property.ofValue(contactPrivate))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .signUsersKey(Property.ofValue(Collections.singletonList(signerMaterial.armoredPublicKey())))
+            .requiredSignerUsers(Property.ofValue(Collections.singletonList(signerUserId)))
+            .build();
+        var decryptOutput = decrypt.run(runContext);
+
+        assertArrayEquals(
+            plaintext,
+            IOUtils.toByteArray(storageInterface.get(TenantService.MAIN_TENANT, null, decryptOutput.getUri()))
+        );
+    }
+
 }

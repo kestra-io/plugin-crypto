@@ -115,7 +115,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
     @Schema(
         title = "Required signer user IDs",
-        description = "Optional list of allowed signer identities, e.g. `signer@kestra.io`. Requires `signUsersKey` to also be set, since the signer's identity is read from the matching public key. When set, decryption fails unless the message is signed and the signer key's OpenPGP user ID contains one of these values."
+        description = "Optional list of allowed signer identities, e.g. `signer@kestra.io`. Requires `signUsersKey` to also be set, since the signer's identity is read from the matching public key. When set, decryption fails unless the message is signed and one of these values exactly matches the signer key's OpenPGP user ID or the email address it contains."
     )
     @PluginProperty(group = "advanced")
     private Property<List<String>> requiredSignerUsers;
@@ -231,7 +231,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                         sig.init(new JcaPGPContentVerifierBuilderProvider(), signerKey);
                     }
 
-                    Object literalObject = plainFactory.nextObject();
+                    var literalObject = plainFactory.nextObject();
                     if (!(literalObject instanceof PGPLiteralData literal)) {
                         throw new PGPException("Expected literal data after the one-pass signature but found " + (literalObject == null ? "end of message" : literalObject.getClass()));
                     }
@@ -240,7 +240,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                         // Streams.pipeAll reads in bulk via read(byte[], int, int), which
                         // FilterInputStream does NOT route through an overridden read(); copy
                         // manually so every byte is also fed into the signature.
-                        byte[] buffer = new byte[8192];
+                        var buffer = new byte[8192];
                         int read;
                         while ((read = dIn.read(buffer)) >= 0) {
                             if (signerKey != null) {
@@ -251,12 +251,12 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                     }
 
                     if (signerKey != null) {
-                        Object signatureObject = plainFactory.nextObject();
+                        var signatureObject = plainFactory.nextObject();
                         if (!(signatureObject instanceof PGPSignatureList signatureList) || signatureList.isEmpty()) {
                             throw new PGPException("No signature packet found to verify the one-pass signature");
                         }
 
-                        PGPSignature matchingSignature = signatureList.get(signatureList.size() - 1);
+                        var matchingSignature = signatureList.get(signatureList.size() - 1);
                         if (!sig.verify(matchingSignature)) {
                             throw new PGPException("Signature verification failed: message content does not match the signature");
                         }
@@ -264,14 +264,12 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                         if (!rRequiredSignerUsers.isEmpty()) {
                             // User IDs live on the key ring's primary key, not on a signing subkey
                             // (GPG signs with a signing subkey by default, e.g. `gpg --sign`).
-                            PGPPublicKey primaryKey = signerKeyRing.getPublicKey();
-                            List<String> signerUserIds = new ArrayList<>();
+                            var primaryKey = signerKeyRing.getPublicKey();
+                            var signerUserIds = new ArrayList<String>();
                             (primaryKey != null ? primaryKey : signerKey).getUserIDs().forEachRemaining(signerUserIds::add);
 
-                            // OpenPGP user IDs are commonly "Name (comment) <email>"; match by
-                            // substring so a required email still matches the full user ID string.
-                            boolean matches = signerUserIds.stream()
-                                .anyMatch(userId -> rRequiredSignerUsers.stream().anyMatch(userId::contains));
+                            var matches = signerUserIds.stream()
+                                .anyMatch(userId -> matchesRequiredSigner(userId, rRequiredSignerUsers));
 
                             if (!matches) {
                                 throw new PGPException(
@@ -292,6 +290,27 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
         return Decrypt.Output.builder()
             .uri(uri)
             .build();
+    }
+
+    /**
+     * An OpenPGP user ID is self-asserted free-form text, commonly shaped as
+     * {@code "Name (comment) <email>"}. A required signer therefore has to match either the whole
+     * user ID or its full email token exactly: a substring match would let any trusted key owner
+     * satisfy {@code requiredSignerUsers: ["alice@corp.com"]} with a user ID such as
+     * {@code "Not Alice <not-alice@corp.com>"}.
+     */
+    private static boolean matchesRequiredSigner(String userId, List<String> requiredSignerUsers) {
+        var email = extractEmail(userId);
+
+        return requiredSignerUsers.stream()
+            .anyMatch(required -> required.equals(userId) || required.equals(email));
+    }
+
+    private static String extractEmail(String userId) {
+        var start = userId.lastIndexOf('<');
+        var end = userId.lastIndexOf('>');
+
+        return start >= 0 && end > start ? userId.substring(start + 1, end) : null;
     }
 
     private PGPPublicKeyRing findPublicKeyRing(List<PGPPublicKeyRingCollection> collections, long keyID) {
