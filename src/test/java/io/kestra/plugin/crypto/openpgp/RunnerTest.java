@@ -21,21 +21,21 @@ class RunnerTest {
     }
 
     @Test
-    @ExecuteFlow("flows/decrypt_wrong_signer.yaml")
+    @ExecuteFlow("flows/invalids/decrypt_wrong_signer.yaml")
     void decrypt_wrong_signer(Execution execution) {
         assertThat(execution.getState().getCurrent(), is(State.Type.FAILED));
         assertThat(failedTaskId(execution), is("decrypt"));
     }
 
     @Test
-    @ExecuteFlow("flows/decrypt_unsigned_message.yaml")
+    @ExecuteFlow("flows/invalids/decrypt_unsigned_message.yaml")
     void decrypt_unsigned_message(Execution execution) {
         assertThat(execution.getState().getCurrent(), is(State.Type.FAILED));
         assertThat(failedTaskId(execution), is("decrypt"));
     }
 
     @Test
-    @ExecuteFlow("flows/decrypt_required_signer_mismatch.yaml")
+    @ExecuteFlow("flows/invalids/decrypt_required_signer_mismatch.yaml")
     void decrypt_required_signer_mismatch(Execution execution) {
         assertThat(execution.getState().getCurrent(), is(State.Type.FAILED));
         assertThat(failedTaskId(execution), is("decrypt"));
