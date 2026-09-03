@@ -8,4 +8,4 @@ Encrypt and decrypt files using OpenPGP from Kestra flows.
 
 `openpgp.Decrypt` decrypts a PGP-encrypted file — set `from` (the `kestra://` URI of the encrypted file), `privateKey` (ASCII-exported private key), and `privateKeyPassphrase` (if the key is passphrase-protected). To verify the signature, set `signUsersKey` (list of public keys) and optionally `requiredSignerUsers` (list of email addresses that must have signed). The output includes `uri` (the decrypted file).
 
-Store keys and passphrases in [secrets](https://kestra.io/docs/concepts/secret) and apply them globally with [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults).
+Store keys and passphrases in [secrets](https://kestra.io/docs/concepts/secret) and set them on each task.
