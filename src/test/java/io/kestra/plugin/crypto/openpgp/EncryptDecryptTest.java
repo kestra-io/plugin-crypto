@@ -2,13 +2,32 @@ package io.kestra.plugin.crypto.openpgp;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 
 import org.apache.commons.io.IOUtils;
+import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.openpgp.PGPCompressedData;
+import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
+import org.bouncycastle.openpgp.PGPEncryptedData;
+import org.bouncycastle.openpgp.PGPEncryptedDataGenerator;
+import org.bouncycastle.openpgp.PGPLiteralData;
+import org.bouncycastle.openpgp.PGPLiteralDataGenerator;
+import org.bouncycastle.openpgp.PGPPublicKey;
+import org.bouncycastle.openpgp.PGPPublicKeyRingCollection;
+import org.bouncycastle.openpgp.PGPUtil;
+import org.bouncycastle.openpgp.operator.jcajce.JcaKeyFingerprintCalculator;
+import org.bouncycastle.openpgp.operator.jcajce.JcePGPDataEncryptorBuilder;
+import org.bouncycastle.openpgp.operator.jcajce.JcePublicKeyKeyEncryptionMethodGenerator;
 import org.junit.jupiter.api.Test;
 
 import com.devskiller.friendly_id.FriendlyId;
@@ -33,6 +52,79 @@ class EncryptDecryptTest {
 
     @Inject
     private StorageInterface storageInterface;
+
+    private static String readPgpKey(String name) throws Exception {
+        return IOUtils.toString(
+            new FileInputStream(
+                new File(
+                    Objects.requireNonNull(
+                        EncryptDecryptTest.class.getClassLoader().getResource("pgp/" + name)
+                    ).toURI()
+                )
+            ),
+            StandardCharsets.US_ASCII
+        );
+    }
+
+    private static PGPPublicKey encryptionKey(String publicKey) throws Exception {
+        try (var input = PGPUtil.getDecoderStream(new ByteArrayInputStream(publicKey.getBytes(StandardCharsets.UTF_8)))) {
+            var keyRings = new PGPPublicKeyRingCollection(input, new JcaKeyFingerprintCalculator());
+            return keyRings.getKeyRings().next().getPublicKey();
+        }
+    }
+
+    private static byte[] encryptForRecipients(List<String> publicKeys, byte[] content) throws Exception {
+        AbstractPgp.addProvider();
+        var encrypted = new ByteArrayOutputStream();
+        try (var armored = new ArmoredOutputStream(encrypted)) {
+            var encryptor = new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
+                .setWithIntegrityPacket(true)
+                .setSecureRandom(new SecureRandom());
+            var generator = new PGPEncryptedDataGenerator(encryptor);
+            for (String publicKey : publicKeys) {
+                generator.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(encryptionKey(publicKey)));
+            }
+            try (OutputStream compressedOutput = generator.open(armored, new byte[4096])) {
+                var compressed = new PGPCompressedDataGenerator(PGPCompressedData.ZIP);
+                try (OutputStream literalOutput = compressed.open(compressedOutput)) {
+                    var literal = new PGPLiteralDataGenerator();
+                    try (OutputStream output = literal.open(
+                        literalOutput, PGPLiteralData.BINARY, "data", new Date(), new byte[4096]
+                    )) {
+                        output.write(content);
+                    }
+                }
+            }
+        }
+        return encrypted.toByteArray();
+    }
+
+    @Test
+    void decryptsWhenItsRecipientPacketIsNotFirst() throws Exception {
+        RunContext runContext = runContextFactory.of();
+        byte[] cleartext = "multiple recipient message".getBytes(StandardCharsets.UTF_8);
+        URI encrypted = storageInterface.put(
+            TenantService.MAIN_TENANT,
+            null,
+            new URI("/" + FriendlyId.createFriendlyId()),
+            new ByteArrayInputStream(
+                encryptForRecipients(List.of(readPgpKey("hello-key.pub"), readPgpKey("contact-key.pub")), cleartext)
+            )
+        );
+
+        var decrypt = Decrypt.builder()
+            .from(Property.ofValue(encrypted.toString()))
+            .privateKey(Property.ofValue(readPgpKey("contact-key.sec")))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .build();
+
+        var output = decrypt.run(runContext);
+
+        assertThat(
+            CharStreams.toString(new InputStreamReader(storageInterface.get(TenantService.MAIN_TENANT, null, output.getUri()))),
+            is(new String(cleartext, StandardCharsets.UTF_8))
+        );
+    }
 
     @Test
     void run() throws Exception {

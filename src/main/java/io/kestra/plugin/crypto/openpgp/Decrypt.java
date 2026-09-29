@@ -174,9 +174,20 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                 object = pgpFactory.nextObject();
 
             PGPEncryptedDataList encList = (PGPEncryptedDataList) object;
-            PGPPublicKeyEncryptedData encData = (PGPPublicKeyEncryptedData) encList.getEncryptedDataObjects().next();
-
-            PGPSecretKey secretKey = secretKeys.getSecretKey(encData.getKeyIdentifier().getKeyId());
+            PGPPublicKeyEncryptedData encData = null;
+            PGPSecretKey secretKey = null;
+            Iterator<PGPEncryptedData> encryptedData = encList.iterator();
+            while (encryptedData.hasNext()) {
+                PGPEncryptedData candidate = encryptedData.next();
+                if (candidate instanceof PGPPublicKeyEncryptedData publicKeyData) {
+                    PGPSecretKey candidateKey = secretKeys.getSecretKey(publicKeyData.getKeyIdentifier().getKeyId());
+                    if (candidateKey != null) {
+                        encData = publicKeyData;
+                        secretKey = candidateKey;
+                        break;
+                    }
+                }
+            }
             if (secretKey == null) {
                 throw new PGPException("No private key found for this message");
             }
