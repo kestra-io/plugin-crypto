@@ -8,6 +8,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
+import javax.crypto.AEADBadTagException;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bouncycastle.openpgp.*;
 import org.bouncycastle.openpgp.operator.jcajce.*;
 import org.bouncycastle.util.io.Streams;
@@ -286,6 +289,9 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
                 verifyIntegrity(encData, clear);
             } catch (IOException e) {
+                if (isAuthenticationFailure(e)) {
+                    throw integrityFailure(e);
+                }
                 // a modified or truncated message usually breaks a packet, the compressed stream or an
                 // AEAD chunk before its integrity can be checked, but so could an I/O failure
                 throw new PGPException("Decryption failed: the encrypted message could not be read or authenticated (" + e.getMessage() + ")", e);
@@ -302,19 +308,15 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
     /**
      * AEAD containers authenticate their first chunk while the stream is being opened, so a
-     * modified or truncated message already fails here. BC reports it as a generic "Exception
-     * starting decryption" wrapping the I/O failure; key problems fail earlier, without one.
+     * modified message can already fail here, reported by BC as a generic "Exception starting
+     * decryption".
      */
     private static InputStream openDataStream(PGPPublicKeyEncryptedData encData, PGPPrivateKey privateKey) throws PGPException {
         try {
             return encData.getDataStream(new JcePublicKeyDataDecryptorFactoryBuilder().build(privateKey));
         } catch (PGPException e) {
-            Throwable ioCause = e.getCause();
-            while (ioCause != null && !(ioCause instanceof IOException)) {
-                ioCause = ioCause.getCause();
-            }
-            if (encData.isAEAD() && ioCause != null) {
-                throw new PGPException("Integrity check failed: the encrypted message was modified, truncated or corrupted (" + ioCause.getMessage() + ")", e);
+            if (isAuthenticationFailure(e)) {
+                throw integrityFailure(e);
             }
             throw e;
         }
@@ -328,14 +330,23 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
      */
     private static void verifyIntegrity(PGPPublicKeyEncryptedData encData, InputStream clear) throws PGPException, IOException {
         if (encData.isAEAD()) {
-            try {
-                Streams.drain(clear);
-            } catch (IOException e) {
-                throw new PGPException("Integrity check failed: the encrypted message was modified, truncated or corrupted (" + e.getMessage() + ")", e);
-            }
+            Streams.drain(clear);
         } else if (!encData.verify()) {
             throw new PGPException("Integrity check failed: the encrypted message was modified or corrupted (MDC mismatch)");
         }
+    }
+
+    /**
+     * BC reports a failed AEAD chunk or final tag as an IOException caused by an AEADBadTagException,
+     * wherever it happens: opening the stream, reading a chunk or draining the final tag.
+     */
+    private static boolean isAuthenticationFailure(Throwable e) {
+        return ExceptionUtils.throwableOfType(e, AEADBadTagException.class) != null;
+    }
+
+    private static PGPException integrityFailure(Exception e) {
+        var tagFailure = ExceptionUtils.throwableOfType(e, AEADBadTagException.class);
+        return new PGPException("Integrity check failed: the encrypted message was modified, truncated or corrupted (" + tagFailure.getMessage() + ")", e);
     }
 
     /**

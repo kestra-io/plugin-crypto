@@ -48,7 +48,6 @@ import jakarta.inject.Inject;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -303,7 +302,7 @@ class DecryptIntegrityTest {
         message[message.length / 2] ^= 0x01;
 
         var exception = assertThrows(PGPException.class, () -> decrypt(message));
-        assertThat(exception.getMessage(), containsString("could not be read or authenticated"));
+        assertThat(exception.getMessage(), containsString("Integrity check failed"));
     }
 
     @Test
@@ -335,7 +334,7 @@ class DecryptIntegrityTest {
         message[100] ^= 0x01;
 
         var exception = assertThrows(PGPException.class, () -> decrypt(message));
-        assertThat(exception.getMessage(), not(containsString("Integrity check failed")));
+        assertThat(exception.getMessage(), containsString("exception decrypting session data"));
     }
 
     @Test
