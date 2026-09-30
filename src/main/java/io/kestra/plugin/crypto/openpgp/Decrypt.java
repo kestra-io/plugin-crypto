@@ -8,6 +8,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
+import javax.crypto.AEADBadTagException;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.bouncycastle.openpgp.*;
 import org.bouncycastle.openpgp.operator.jcajce.*;
 import org.bouncycastle.util.io.Streams;
@@ -33,7 +36,7 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 @NoArgsConstructor
 @Schema(
     title = "Decrypt and optionally verify OpenPGP files",
-    description = "Streams an ASCII-armored PGP message from Kestra storage, decrypts it with the provided secret key and optional passphrase, and returns the cleartext URI. When signer public keys are supplied, verifies a one-pass signature and can enforce specific signer user IDs."
+    description = "Streams an ASCII-armored PGP message from Kestra storage, decrypts it with the provided secret key and optional passphrase, and returns the cleartext URI. When signer public keys are supplied, verifies a one-pass signature and can enforce specific signer user IDs. The integrity of the encrypted message is always checked (MDC for SEIP, authentication tag for AEAD) and the task fails if the message was modified; legacy messages without integrity protection (SED packets) are rejected."
 )
 @Plugin(
     examples = {
@@ -185,10 +188,12 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                 new JcePBESecretKeyDecryptorBuilder().build(rPassphrase)
             );
 
+            if (!encData.isAEAD() && !encData.isIntegrityProtected()) {
+                throw new PGPException("Message is not integrity protected (legacy SED packet); refusing to decrypt it, see RFC 9580 section 5.7");
+            }
+
             try (
-                InputStream clear = encData.getDataStream(
-                    new JcePublicKeyDataDecryptorFactoryBuilder().build(privateKey)
-                )
+                InputStream clear = openDataStream(encData, privateKey)
             ) {
 
                 PGPObjectFactory plainFactory = new PGPObjectFactory(clear, new JcaKeyFingerprintCalculator());
@@ -281,6 +286,15 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                 } else {
                     throw new PGPException("Unknown PGP message type: " + message.getClass());
                 }
+
+                verifyIntegrity(encData, clear);
+            } catch (IOException e) {
+                if (isAuthenticationFailure(e)) {
+                    throw integrityFailure(e);
+                }
+                // a modified or truncated message usually breaks a packet, the compressed stream or an
+                // AEAD chunk before its integrity can be checked, but so could an I/O failure
+                throw new PGPException("Decryption failed: the encrypted message could not be read or authenticated (" + e.getMessage() + ")", e);
             }
         }
 
@@ -290,6 +304,49 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
         return Decrypt.Output.builder()
             .uri(uri)
             .build();
+    }
+
+    /**
+     * AEAD containers authenticate their first chunk while the stream is being opened, so a
+     * modified message can already fail here, reported by BC as a generic "Exception starting
+     * decryption".
+     */
+    private static InputStream openDataStream(PGPPublicKeyEncryptedData encData, PGPPrivateKey privateKey) throws PGPException {
+        try {
+            return encData.getDataStream(new JcePublicKeyDataDecryptorFactoryBuilder().build(privateKey));
+        } catch (PGPException e) {
+            if (isAuthenticationFailure(e)) {
+                throw integrityFailure(e);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Fails if the decrypted content was modified in transit. SEIP v1 carries an MDC that is only
+     * checked by {@code verify()}; AEAD containers (v5 and SEIPDv2) are authenticated by BC while
+     * reading, so draining the stream checks the final tag. Legacy SED packets, which carry no
+     * integrity protection, are rejected before decryption.
+     */
+    private static void verifyIntegrity(PGPPublicKeyEncryptedData encData, InputStream clear) throws PGPException, IOException {
+        if (encData.isAEAD()) {
+            Streams.drain(clear);
+        } else if (!encData.verify()) {
+            throw new PGPException("Integrity check failed: the encrypted message was modified or corrupted (MDC mismatch)");
+        }
+    }
+
+    /**
+     * BC reports a failed AEAD chunk or final tag as an IOException caused by an AEADBadTagException,
+     * wherever it happens: opening the stream, reading a chunk or draining the final tag.
+     */
+    private static boolean isAuthenticationFailure(Throwable e) {
+        return ExceptionUtils.throwableOfType(e, AEADBadTagException.class) != null;
+    }
+
+    private static PGPException integrityFailure(Exception e) {
+        var tagFailure = ExceptionUtils.throwableOfType(e, AEADBadTagException.class);
+        return new PGPException("Integrity check failed: the encrypted message was modified, truncated or corrupted (" + tagFailure.getMessage() + ")", e);
     }
 
     /**
