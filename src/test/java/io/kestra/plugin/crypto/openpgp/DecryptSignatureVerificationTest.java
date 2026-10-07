@@ -154,6 +154,62 @@ class DecryptSignatureVerificationTest {
         return byteOut.toByteArray();
     }
 
+    /**
+     * Same as {@link #buildEncryptedMessage} but with a caller-chosen signature type, so a test can
+     * forge a non-document signature (e.g. a user-id certification) whose signed bytes equal the
+     * literal. Only the {@code signatureGenerator.init(...)} type differs from the happy-path builder.
+     */
+    private static byte[] buildEncryptedMessageWithSignatureType(
+        String encryptionPublicKey,
+        PGPSecretKey signingSecretKey,
+        PGPPrivateKey signingPrivateKey,
+        byte[] literalContent,
+        byte[] signedContent,
+        int signatureType
+    ) throws Exception {
+        AbstractPgp.addProvider();
+
+        PGPPublicKeyRingCollection pubKeyRings;
+        try (var pubKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(encryptionPublicKey.getBytes(StandardCharsets.UTF_8)))) {
+            pubKeyRings = new PGPPublicKeyRingCollection(pubKeyIn, new JcaKeyFingerprintCalculator());
+        }
+        PGPPublicKey encryptionKey = pubKeyRings.getKeyRings().next().getPublicKey();
+
+        var signerBuilder = new JcaPGPContentSignerBuilder(signingSecretKey.getPublicKey().getAlgorithm(), PGPUtil.SHA256);
+        var signatureGenerator = new PGPSignatureGenerator(signerBuilder, signingSecretKey.getPublicKey());
+        signatureGenerator.init(signatureType, signingPrivateKey);
+        signatureGenerator.update(signedContent);
+
+        var byteOut = new ByteArrayOutputStream();
+        try (
+            OutputStream fileOut = byteOut;
+            var armoredOut = new ArmoredOutputStream(fileOut)
+        ) {
+            var encryptor = new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
+                .setWithIntegrityPacket(true)
+                .setSecureRandom(new SecureRandom());
+
+            var encGen = new PGPEncryptedDataGenerator(encryptor);
+            encGen.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(encryptionKey));
+
+            try (OutputStream encOut = encGen.open(armoredOut, new byte[4096])) {
+                var comData = new PGPCompressedDataGenerator(PGPCompressedData.ZIP);
+                try (var compressedOut = comData.open(encOut)) {
+                    signatureGenerator.generateOnePassVersion(false).encode(compressedOut);
+
+                    var literalGen = new PGPLiteralDataGenerator();
+                    try (var literalOut = literalGen.open(compressedOut, PGPLiteralData.BINARY, "data", new Date(), new byte[4096])) {
+                        literalOut.write(literalContent);
+                    }
+
+                    signatureGenerator.generate().encode(compressedOut);
+                }
+            }
+        }
+
+        return byteOut.toByteArray();
+    }
+
     private static byte[] buildEncryptedMessageWithMismatchedSignature(
         String encryptionPublicKey,
         String signingSecretKeyArmored,
@@ -502,6 +558,47 @@ class DecryptSignatureVerificationTest {
             plaintext,
             IOUtils.toByteArray(storageInterface.get(TenantService.MAIN_TENANT, null, decryptOutput.getUri()))
         );
+    }
+
+    /**
+     * A non-document signature (here a user-id certification, type 0x10) whose signed bytes equal the
+     * literal must be rejected: verifying the signature math is not enough, the signature TYPE has to
+     * be a document signature (BINARY_DOCUMENT / CANONICAL_TEXT_DOCUMENT). Before the fix this message
+     * is accepted; after it, Decrypt refuses it.
+     */
+    @Test
+    void certificationSignatureRejected() throws Exception {
+        var runContext = runContextFactory.of();
+
+        var contactPublic = readResource("pgp/contact-key.pub");
+        var contactPrivate = readResource("pgp/contact-key.sec");
+
+        var signerUserId = "Kestra Subkey Signer <subkey-signer@kestra.io>";
+        var signerMaterial = buildKeyRingWithDedicatedSigningSubkey(signerUserId, "subkey-pass".toCharArray());
+
+        var plaintext = "order_id,customer,amount\n1,ACME,10.00\n".getBytes(StandardCharsets.UTF_8);
+
+        // literalContent == signedContent, but the signature is initialised as a certification, not a document.
+        var message = buildEncryptedMessageWithSignatureType(
+            contactPublic,
+            signerMaterial.signingSecretKey(),
+            signerMaterial.signingPrivateKey(),
+            plaintext,
+            plaintext,
+            PGPSignature.POSITIVE_CERTIFICATION
+        );
+
+        var fileStorage = storeFile(message);
+
+        var decrypt = Decrypt.builder()
+            .from(Property.ofValue(fileStorage.toString()))
+            .privateKey(Property.ofValue(contactPrivate))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .signUsersKey(Property.ofValue(Collections.singletonList(signerMaterial.armoredPublicKey())))
+            .requiredSignerUsers(Property.ofValue(Collections.singletonList("subkey-signer@kestra.io")))
+            .build();
+
+        assertThrows(PGPException.class, () -> decrypt.run(runContext));
     }
 
 }

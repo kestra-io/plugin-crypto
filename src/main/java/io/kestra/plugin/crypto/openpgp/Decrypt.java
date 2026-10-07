@@ -275,6 +275,21 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                             throw new PGPException("Signature verification failed: message content does not match the signature");
                         }
 
+                        // A v4 signature's hash covers the literal content AND the signature trailer, and the
+                        // trailer carries the signature TYPE taken from the packet itself. So a signature the
+                        // signer made for another purpose (a user-id certification, a key/subkey binding, a
+                        // standalone signature, ...) verifies here whenever the literal happens to equal the
+                        // bytes that signature covered - e.g. a certification re-framed over a literal built from
+                        // the signer's own public key material. Require a document signature so a non-document
+                        // signature is never accepted as proof that the signer sent this file.
+                        int signatureType = matchingSignature.getSignatureType();
+                        if (signatureType != PGPSignature.BINARY_DOCUMENT && signatureType != PGPSignature.CANONICAL_TEXT_DOCUMENT) {
+                            throw new PGPException(
+                                "Signature is not a document signature (type 0x" + Integer.toHexString(signatureType) +
+                                "); refusing to treat it as proof the signer sent this file"
+                            );
+                        }
+
                         if (!rRequiredSignerUsers.isEmpty()) {
                             // User IDs live on the key ring's primary key, not on a signing subkey
                             // (GPG signs with a signing subkey by default, e.g. `gpg --sign`).
