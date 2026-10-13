@@ -290,6 +290,15 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                             );
                         }
 
+                        // The literal is canonicalized according to the ONE-PASS packet's type, which is not covered
+                        // by any signature, while verify() hashes the SIGNATURE packet's trailer. A binary signature
+                        // behind a text one-pass header would let CRLFs be rewritten while still verifying, so the
+                        // two types must agree.
+                        if (sig.getSignatureType() != signatureType) {
+                            throw new PGPException("One-pass signature type 0x" + Integer.toHexString(sig.getSignatureType())
+                                + " does not match signature type 0x" + Integer.toHexString(signatureType));
+                        }
+
                         if (!rRequiredSignerUsers.isEmpty()) {
                             // User IDs live on the key ring's primary key, not on a signing subkey
                             // (GPG signs with a signing subkey by default, e.g. `gpg --sign`).
