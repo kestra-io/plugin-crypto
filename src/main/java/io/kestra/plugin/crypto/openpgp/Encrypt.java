@@ -7,6 +7,8 @@ import java.security.SecureRandom;
 import java.util.*;
 
 import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.bcpg.SignatureSubpacketTags;
+import org.bouncycastle.bcpg.sig.KeyFlags;
 import org.bouncycastle.openpgp.*;
 import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.*;
@@ -131,7 +133,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
 
     @Schema(
         title = "User ID bound to the signature",
-        description = "Required when signing; identifies the signing key within the secret key ring."
+        description = "Required when `signPrivateKey` is set. Selects the key in `signPrivateKey` whose user ID equals this value, either the full user ID or its email address (e.g. `signer@kestra.io`, compared ignoring case). Within that key, the newest subkey flagged for signing is used. The task fails if no key, or more than one key, matches."
     )
     @PluginProperty(group = "advanced")
     private Property<String> signUser;
@@ -155,13 +157,18 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         PGPPublicKey encryptionKey = pubKeyRings.getKeyRings().next().getPublicKey();
 
         PGPSignatureGenerator signatureGenerator = null;
-        if (this.signPrivateKey != null && this.signUser != null) {
+        if (this.signPrivateKey != null) {
             var rSignPrivateKey = runContext.render(this.signPrivateKey).as(String.class).orElseThrow();
             var rSignPassphrase = runContext.render(this.signPassphrase).as(String.class).orElse("").toCharArray();
+            var rSignUser = runContext.render(this.signUser).as(String.class)
+                .filter(user -> !user.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("'signUser' is required when 'signPrivateKey' is set, to select the signing key"));
 
-            InputStream privKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(rSignPrivateKey.getBytes(StandardCharsets.UTF_8)));
-            var secretKeyRings = new PGPSecretKeyRingCollection(privKeyIn, new JcaKeyFingerprintCalculator());
-            PGPSecretKey signingSecretKey = secretKeyRings.getKeyRings().next().getSecretKey();
+            PGPSecretKeyRingCollection secretKeyRings;
+            try (var privKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(rSignPrivateKey.getBytes(StandardCharsets.UTF_8)))) {
+                secretKeyRings = new PGPSecretKeyRingCollection(privKeyIn, new JcaKeyFingerprintCalculator());
+            }
+            PGPSecretKey signingSecretKey = findSigningKey(findSigningKeyRing(secretKeyRings, rSignUser), rSignUser);
             PGPPrivateKey signingPrivateKey = signingSecretKey.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder().build(rSignPassphrase));
 
             PGPContentSignerBuilder signerBuilder = new JcaPGPContentSignerBuilder(
@@ -222,6 +229,89 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         return Output.builder()
             .uri(uri)
             .build();
+    }
+
+    // Several matches fail instead of falling back to keyring order, so the signer is never chosen silently.
+    private static PGPSecretKeyRing findSigningKeyRing(PGPSecretKeyRingCollection secretKeyRings, String signUser) throws PGPException {
+        var matches = new ArrayList<PGPSecretKeyRing>();
+        var availableUserIds = new ArrayList<String>();
+
+        for (PGPSecretKeyRing ring : secretKeyRings) {
+            var ringUserIds = new ArrayList<String>();
+            ring.getPublicKey().getUserIDs().forEachRemaining(ringUserIds::add);
+            availableUserIds.addAll(ringUserIds);
+
+            if (ringUserIds.stream().anyMatch(userId -> matchesUserId(userId, signUser))) {
+                matches.add(ring);
+            }
+        }
+
+        if (matches.isEmpty()) {
+            throw new PGPException(
+                "No secret key in 'signPrivateKey' has a user ID matching signUser '" + signUser + "'; available user IDs: " + availableUserIds
+            );
+        }
+
+        if (matches.size() > 1) {
+            var keyIds = matches.stream()
+                .map(ring -> Long.toHexString(ring.getPublicKey().getKeyID()).toUpperCase())
+                .toList();
+            throw new PGPException(
+                "signUser '" + signUser + "' matches several secret keys in 'signPrivateKey' " + keyIds + "; provide only the intended signing key"
+            );
+        }
+
+        return matches.getFirst();
+    }
+
+    // Prefers the newest key flagged for signing (often a subkey), as GnuPG does; keys without flags fall back to a signing-capable primary.
+    private static PGPSecretKey findSigningKey(PGPSecretKeyRing ring, String signUser) throws PGPException {
+        var primaryKeyId = ring.getPublicKey().getKeyID();
+        var anyKeyFlags = false;
+        PGPSecretKey newestSigningKey = null;
+
+        for (PGPSecretKey secretKey : ring) {
+            var flags = keyFlags(secretKey.getPublicKey(), primaryKeyId);
+            anyKeyFlags |= flags != null;
+
+            var canSign = flags != null && (flags & KeyFlags.SIGN_DATA) != 0;
+            var isNewer = newestSigningKey == null
+                || secretKey.getPublicKey().getCreationTime().after(newestSigningKey.getPublicKey().getCreationTime());
+            if (canSign && !secretKey.isPrivateKeyEmpty() && isNewer) {
+                newestSigningKey = secretKey;
+            }
+        }
+
+        if (newestSigningKey != null) {
+            return newestSigningKey;
+        }
+
+        var primary = ring.getSecretKey();
+        if (!anyKeyFlags && primary.isSigningKey() && !primary.isPrivateKeyEmpty()) {
+            return primary;
+        }
+
+        throw new PGPException(
+            "The secret key for signUser '" + signUser
+                + "' has no usable signing key: no key is flagged for signing, or its private part is missing from 'signPrivateKey' (e.g. an export made with 'gpg --export-secret-subkeys' that omits the signing subkey)"
+        );
+    }
+
+    // Reads the key flags from the newest self-signature (primary key) or binding signature (subkey) issued by the primary key.
+    private static Integer keyFlags(PGPPublicKey key, long primaryKeyId) {
+        PGPSignature newest = null;
+
+        for (var it = key.getSignatures(); it.hasNext();) {
+            var signature = it.next();
+            var hashed = signature.getHashedSubPackets();
+            var isSelfIssued = signature.getKeyID() == primaryKeyId;
+            var hasFlags = hashed != null && hashed.hasSubpacket(SignatureSubpacketTags.KEY_FLAGS);
+            if (isSelfIssued && hasFlags && (newest == null || signature.getCreationTime().after(newest.getCreationTime()))) {
+                newest = signature;
+            }
+        }
+
+        return newest == null ? null : newest.getHashedSubPackets().getKeyFlags();
     }
 
     @Builder

@@ -118,7 +118,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
 
     @Schema(
         title = "Required signer user IDs",
-        description = "Optional list of allowed signer identities, e.g. `signer@kestra.io`. Requires `signUsersKey` to also be set, since the signer's identity is read from the matching public key. When set, decryption fails unless the message is signed and one of these values exactly matches the signer key's OpenPGP user ID or the email address it contains."
+        description = "Optional list of allowed signer identities, e.g. `signer@kestra.io`. Requires `signUsersKey` to also be set, since the signer's identity is read from the matching public key. When set, decryption fails unless the message is signed and one of these values exactly matches the signer key's OpenPGP user ID, or matches the email address it contains ignoring case."
     )
     @PluginProperty(group = "advanced")
     private Property<List<String>> requiredSignerUsers;
@@ -298,7 +298,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                             (primaryKey != null ? primaryKey : signerKey).getUserIDs().forEachRemaining(signerUserIds::add);
 
                             var matches = signerUserIds.stream()
-                                .anyMatch(userId -> matchesRequiredSigner(userId, rRequiredSignerUsers));
+                                .anyMatch(userId -> rRequiredSignerUsers.stream().anyMatch(required -> matchesUserId(userId, required)));
 
                             if (!matches) {
                                 throw new PGPException(
@@ -371,27 +371,6 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
     private static PGPException integrityFailure(Exception e) {
         var tagFailure = ExceptionUtils.throwableOfType(e, AEADBadTagException.class);
         return new PGPException("Integrity check failed: the encrypted message was modified, truncated or corrupted (" + tagFailure.getMessage() + ")", e);
-    }
-
-    /**
-     * An OpenPGP user ID is self-asserted free-form text, commonly shaped as
-     * {@code "Name (comment) <email>"}. A required signer therefore has to match either the whole
-     * user ID or its full email token exactly: a substring match would let any trusted key owner
-     * satisfy {@code requiredSignerUsers: ["alice@corp.com"]} with a user ID such as
-     * {@code "Not Alice <not-alice@corp.com>"}.
-     */
-    private static boolean matchesRequiredSigner(String userId, List<String> requiredSignerUsers) {
-        var email = extractEmail(userId);
-
-        return requiredSignerUsers.stream()
-            .anyMatch(required -> required.equals(userId) || required.equals(email));
-    }
-
-    private static String extractEmail(String userId) {
-        var start = userId.lastIndexOf('<');
-        var end = userId.lastIndexOf('>');
-
-        return start >= 0 && end > start ? userId.substring(start + 1, end) : null;
     }
 
     private PGPPublicKeyRing findPublicKeyRing(List<PGPPublicKeyRingCollection> collections, long keyID) {
