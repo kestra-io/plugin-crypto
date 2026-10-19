@@ -7,7 +7,14 @@ import java.security.SecureRandom;
 import java.util.*;
 
 import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
+import org.bouncycastle.bcpg.SignatureSubpacketTags;
+import org.bouncycastle.bcpg.sig.KeyFlags;
 import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.api.OpenPGPCertificate;
+import org.bouncycastle.openpgp.api.OpenPGPDefaultPolicy;
+import org.bouncycastle.openpgp.api.OpenPGPPolicy;
+import org.bouncycastle.openpgp.api.jcajce.JcaOpenPGPImplementation;
 import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.*;
 
@@ -84,6 +91,10 @@ import lombok.experimental.SuperBuilder;
     }
 )
 public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output> {
+    private static final OpenPGPPolicy KEY_POLICY = new OpenPGPDefaultPolicy()
+        .acceptPublicKeyAlgorithmWithMinimalStrength(PublicKeyAlgorithmTags.RSA_GENERAL, 1024)
+        .acceptPublicKeyAlgorithmWithMinimalStrength(PublicKeyAlgorithmTags.ELGAMAL_ENCRYPT, 1024);
+
     @Schema(
         title = "Source file to encrypt",
         description = "Kestra internal storage URI or templated path to the cleartext file."
@@ -152,7 +163,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
             pubKeyRings = new PGPPublicKeyRingCollection(pubKeyIn, new JcaKeyFingerprintCalculator());
         }
 
-        PGPPublicKey encryptionKey = pubKeyRings.getKeyRings().next().getPublicKey();
+        PGPPublicKey encryptionKey = encryptionKey(pubKeyRings.getKeyRings().next());
 
         PGPSignatureGenerator signatureGenerator = null;
         if (this.signPrivateKey != null && this.signUser != null) {
@@ -222,6 +233,35 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         return Output.builder()
             .uri(uri)
             .build();
+    }
+
+    private static PGPPublicKey encryptionKey(PGPPublicKeyRing keyRing) throws PGPException {
+        Date now = new Date();
+        List<OpenPGPCertificate.OpenPGPComponentKey> encryptionKeys = new OpenPGPCertificate(keyRing, new JcaOpenPGPImplementation(), KEY_POLICY).getValidKeys(now).stream()
+            .filter(key -> key.getPGPPublicKey().isEncryptionKey() && allowsEncryption(key, now))
+            .toList();
+
+        return encryptionKeys.stream()
+            .filter(key -> !key.isPrimaryKey())
+            .findFirst()
+            .or(() -> encryptionKeys.stream().findFirst())
+            .map(OpenPGPCertificate.OpenPGPComponentKey::getPGPPublicKey)
+            .orElseThrow(() -> new PGPException("No usable encryption key found in the first key ring of `key`"));
+    }
+
+    private static boolean allowsEncryption(OpenPGPCertificate.OpenPGPComponentKey key, Date now) {
+        if (key.isPrimaryKey()) {
+            KeyFlags keyFlags = key.getKeyFlags(now);
+            return keyFlags == null || hasEncryptionFlag(keyFlags.getFlags());
+        }
+
+        OpenPGPCertificate.OpenPGPComponentSignature binding = key.getLatestSelfSignature(now);
+        PGPSignatureSubpacketVector hashed = binding == null ? null : binding.getSignature().getHashedSubPackets();
+        return hashed == null || !hashed.hasSubpacket(SignatureSubpacketTags.KEY_FLAGS) || hasEncryptionFlag(hashed.getKeyFlags());
+    }
+
+    private static boolean hasEncryptionFlag(int flags) {
+        return (flags & (KeyFlags.ENCRYPT_COMMS | KeyFlags.ENCRYPT_STORAGE)) != 0;
     }
 
     @Builder
