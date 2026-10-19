@@ -286,7 +286,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                         if (signatureType != PGPSignature.BINARY_DOCUMENT && signatureType != PGPSignature.CANONICAL_TEXT_DOCUMENT) {
                             throw new PGPException(
                                 "Signature is not a document signature (type 0x" + Integer.toHexString(signatureType) +
-                                "); refusing to treat it as proof the signer sent this file"
+                                    "); refusing to treat it as proof the signer sent this file"
                             );
                         }
 
