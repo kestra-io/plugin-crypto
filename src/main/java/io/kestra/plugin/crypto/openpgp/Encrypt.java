@@ -37,7 +37,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @Schema(
     title = "Encrypt and optionally sign files with OpenPGP",
-    description = "Streams a Kestra-stored file through ASCII-armored PGP encryption (AES-256 with integrity) and returns the storage URI. Optionally signs the payload when a private key and passphrase are provided; only the first public key in `key` is used for encryption."
+    description = "Streams a Kestra-stored file through ASCII-armored PGP encryption (AES-256 with integrity) and returns the storage URI. Optionally signs the payload when a private key and passphrase are provided; only the first key ring in `key` is used, and its valid encryption subkey is preferred over the primary key."
 )
 @Plugin(
     examples = {
@@ -104,7 +104,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
 
     @Schema(
         title = "Public key for encryption",
-        description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used."
+        description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used, encrypting to its valid encryption subkey or, if it has none, to its primary key."
     )
     @PluginProperty(group = "connection")
     private Property<String> key;
