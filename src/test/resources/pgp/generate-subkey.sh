@@ -30,7 +30,22 @@ Passphrase: abc456
 %commit
 EOF
 
-for VALUE in ed25519 rsa-subkey
+gpg --batch --gen-key <<EOF
+Key-Type: DSA
+Key-Length: 2048
+Key-Usage: sign
+Subkey-Type: ELG-E
+Subkey-Length: 2048
+Subkey-Usage: encrypt
+Name-Real: Kestra
+Name-Comment: for unit test
+Name-Email: dsa-elgamal@kestra.io
+Expire-Date: 0
+Passphrase: abc456
+%commit
+EOF
+
+for VALUE in ed25519 rsa-subkey dsa-elgamal
 do
   gpg --armor --export "$VALUE@kestra.io" > $VALUE-key.pub
   gpg --batch --pinentry-mode loopback --passphrase abc456 --armor --export-secret-key "$VALUE@kestra.io" > $VALUE-key.sec

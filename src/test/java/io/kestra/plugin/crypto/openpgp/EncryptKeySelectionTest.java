@@ -80,6 +80,37 @@ class EncryptKeySelectionTest {
     }
 
     @Test
+    void encryptsToElGamalSubkeyUnderDsaPrimary() throws Exception {
+        RunContext runContext = runContextFactory.of();
+
+        URI encrypted = encrypt(runContext, "dsa-elgamal");
+
+        assertThat(recipientKeyId(encrypted), is(encryptionSubkey("dsa-elgamal").getKeyID()));
+        assertThat(decrypt(runContext, encrypted, "dsa-elgamal"), is(CONTENT));
+    }
+
+    @Test
+    void encryptsToKeySelfSignedWithSha1() throws Exception {
+        PGPKeyPair primary = rsaKeyPair(new Date());
+        PGPKeyRingGenerator keyRingGenerator = new PGPKeyRingGenerator(
+            PGPSignature.POSITIVE_CERTIFICATION,
+            primary,
+            "sha1@kestra.io",
+            new JcaPGPDigestCalculatorProviderBuilder().build().get(HashAlgorithmTags.SHA1),
+            null,
+            null,
+            new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.RSA_GENERAL, HashAlgorithmTags.SHA1),
+            null
+        );
+        PGPKeyPair subkeyPair = rsaKeyPair(new Date());
+        keyRingGenerator.addSubKey(subkeyPair, null, null);
+
+        URI encrypted = encrypt(keyRingGenerator.generatePublicKeyRing(), "sha1@kestra.io");
+
+        assertThat(recipientKeyId(encrypted), is(subkeyPair.getKeyID()));
+    }
+
+    @Test
     void encryptsToPrimaryKeyWithoutKeyFlags() throws Exception {
         PGPPublicKeyRing keyRing = keyRingGenerator(rsaKeyPair(new Date()), "no-flags@kestra.io", null).generatePublicKeyRing();
 
