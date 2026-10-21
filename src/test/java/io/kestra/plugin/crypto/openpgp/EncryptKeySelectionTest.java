@@ -111,6 +111,20 @@ class EncryptKeySelectionTest {
     }
 
     @Test
+    void rejectsWeakEncryptionSubkey() throws Exception {
+        PGPSignatureSubpacketGenerator signingOnly = new PGPSignatureSubpacketGenerator();
+        signingOnly.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA);
+        PGPKeyRingGenerator keyRingGenerator = keyRingGenerator(rsaKeyPair(new Date()), "weak-subkey@kestra.io", signingOnly.generate());
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(512);
+        keyRingGenerator.addSubKey(new JcaPGPKeyPair(PublicKeyAlgorithmTags.RSA_GENERAL, generator.generateKeyPair(), new Date()), null, null);
+        PGPPublicKeyRing keyRing = keyRingGenerator.generatePublicKeyRing();
+
+        PGPException exception = assertThrows(PGPException.class, () -> encrypt(keyRing, "weak-subkey@kestra.io"));
+        assertThat(exception.getMessage(), containsString("No usable encryption key"));
+    }
+
+    @Test
     void encryptsToPrimaryKeyWithoutKeyFlags() throws Exception {
         PGPPublicKeyRing keyRing = keyRingGenerator(rsaKeyPair(new Date()), "no-flags@kestra.io", null).generatePublicKeyRing();
 
