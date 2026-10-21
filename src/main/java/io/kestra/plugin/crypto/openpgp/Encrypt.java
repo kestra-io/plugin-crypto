@@ -248,7 +248,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
     private static PGPPublicKey encryptionKey(PGPPublicKeyRing keyRing) throws PGPException {
         var now = new Date();
         var encryptionKeys = new OpenPGPCertificate(keyRing, new JcaOpenPGPImplementation(), KEY_POLICY).getValidKeys(now).stream()
-            .filter(key -> key.getPGPPublicKey().isEncryptionKey() && allowsEncryption(key, now))
+            .filter(key -> key.getPGPPublicKey().isEncryptionKey() && KEY_POLICY.isAcceptableEncryptionKey(key.getPGPPublicKey()) && allowsEncryption(key, now))
             .toList();
 
         return encryptionKeys.stream()
