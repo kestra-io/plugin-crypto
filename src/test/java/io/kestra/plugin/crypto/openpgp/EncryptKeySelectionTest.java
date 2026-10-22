@@ -61,9 +61,9 @@ class EncryptKeySelectionTest {
 
     @Test
     void encryptsToEd25519KeyEncryptionSubkey() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
 
-        URI encrypted = encrypt(runContext, "ed25519");
+        var encrypted = encrypt(runContext, "ed25519");
 
         assertThat(recipientKeyId(encrypted), is(encryptionSubkey("ed25519").getKeyID()));
         assertThat(decrypt(runContext, encrypted, "ed25519"), is(CONTENT));
@@ -71,9 +71,9 @@ class EncryptKeySelectionTest {
 
     @Test
     void encryptsToRsaEncryptionSubkeyInsteadOfSigningPrimary() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
 
-        URI encrypted = encrypt(runContext, "rsa-subkey");
+        var encrypted = encrypt(runContext, "rsa-subkey");
 
         assertThat(recipientKeyId(encrypted), is(encryptionSubkey("rsa-subkey").getKeyID()));
         assertThat(decrypt(runContext, encrypted, "rsa-subkey"), is(CONTENT));
@@ -81,9 +81,9 @@ class EncryptKeySelectionTest {
 
     @Test
     void encryptsToElGamalSubkeyUnderDsaPrimary() throws Exception {
-        RunContext runContext = runContextFactory.of();
+        var runContext = runContextFactory.of();
 
-        URI encrypted = encrypt(runContext, "dsa-elgamal");
+        var encrypted = encrypt(runContext, "dsa-elgamal");
 
         assertThat(recipientKeyId(encrypted), is(encryptionSubkey("dsa-elgamal").getKeyID()));
         assertThat(decrypt(runContext, encrypted, "dsa-elgamal"), is(CONTENT));
@@ -91,8 +91,8 @@ class EncryptKeySelectionTest {
 
     @Test
     void encryptsToKeySelfSignedWithSha1() throws Exception {
-        PGPKeyPair primary = rsaKeyPair(new Date());
-        PGPKeyRingGenerator keyRingGenerator = new PGPKeyRingGenerator(
+        var primary = rsaKeyPair(new Date());
+        var keyRingGenerator = new PGPKeyRingGenerator(
             PGPSignature.POSITIVE_CERTIFICATION,
             primary,
             "sha1@kestra.io",
@@ -102,33 +102,33 @@ class EncryptKeySelectionTest {
             new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.RSA_GENERAL, HashAlgorithmTags.SHA1),
             null
         );
-        PGPKeyPair subkeyPair = rsaKeyPair(new Date());
+        var subkeyPair = rsaKeyPair(new Date());
         keyRingGenerator.addSubKey(subkeyPair, null, null);
 
-        URI encrypted = encrypt(keyRingGenerator.generatePublicKeyRing(), "sha1@kestra.io");
+        var encrypted = encrypt(keyRingGenerator.generatePublicKeyRing(), "sha1@kestra.io");
 
         assertThat(recipientKeyId(encrypted), is(subkeyPair.getKeyID()));
     }
 
     @Test
     void rejectsWeakEncryptionSubkey() throws Exception {
-        PGPSignatureSubpacketGenerator signingOnly = new PGPSignatureSubpacketGenerator();
+        var signingOnly = new PGPSignatureSubpacketGenerator();
         signingOnly.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA);
-        PGPKeyRingGenerator keyRingGenerator = keyRingGenerator(rsaKeyPair(new Date()), "weak-subkey@kestra.io", signingOnly.generate());
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        var keyRingGenerator = keyRingGenerator(rsaKeyPair(new Date()), "weak-subkey@kestra.io", signingOnly.generate());
+        var generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(512);
         keyRingGenerator.addSubKey(new JcaPGPKeyPair(PublicKeyAlgorithmTags.RSA_GENERAL, generator.generateKeyPair(), new Date()), null, null);
-        PGPPublicKeyRing keyRing = keyRingGenerator.generatePublicKeyRing();
+        var keyRing = keyRingGenerator.generatePublicKeyRing();
 
-        PGPException exception = assertThrows(PGPException.class, () -> encrypt(keyRing, "weak-subkey@kestra.io"));
+        var exception = assertThrows(PGPException.class, () -> encrypt(keyRing, "weak-subkey@kestra.io"));
         assertThat(exception.getMessage(), containsString("No usable encryption key"));
     }
 
     @Test
     void encryptsToPrimaryKeyWithoutKeyFlags() throws Exception {
-        PGPPublicKeyRing keyRing = keyRingGenerator(rsaKeyPair(new Date()), "no-flags@kestra.io", null).generatePublicKeyRing();
+        var keyRing = keyRingGenerator(rsaKeyPair(new Date()), "no-flags@kestra.io", null).generatePublicKeyRing();
 
-        URI encrypted = Encrypt.builder()
+        var encrypted = Encrypt.builder()
             .from(Property.ofValue(put(CONTENT).toString()))
             .key(Property.ofValue(armor(keyRing)))
             .recipients(Property.ofValue(Collections.singletonList("no-flags@kestra.io")))
@@ -141,14 +141,14 @@ class EncryptKeySelectionTest {
 
     @Test
     void encryptsToSubkeyWithoutKeyFlagsUnderSigningOnlyPrimary() throws Exception {
-        PGPSignatureSubpacketGenerator signingOnly = new PGPSignatureSubpacketGenerator();
+        var signingOnly = new PGPSignatureSubpacketGenerator();
         signingOnly.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA);
-        PGPKeyRingGenerator keyRingGenerator = keyRingGenerator(rsaKeyPair(new Date()), "unflagged-subkey@kestra.io", signingOnly.generate());
-        PGPKeyPair subkeyPair = rsaKeyPair(new Date());
+        var keyRingGenerator = keyRingGenerator(rsaKeyPair(new Date()), "unflagged-subkey@kestra.io", signingOnly.generate());
+        var subkeyPair = rsaKeyPair(new Date());
         keyRingGenerator.addSubKey(subkeyPair, null, null);
-        PGPPublicKeyRing keyRing = keyRingGenerator.generatePublicKeyRing();
+        var keyRing = keyRingGenerator.generatePublicKeyRing();
 
-        URI encrypted = Encrypt.builder()
+        var encrypted = Encrypt.builder()
             .from(Property.ofValue(put(CONTENT).toString()))
             .key(Property.ofValue(armor(keyRing)))
             .recipients(Property.ofValue(Collections.singletonList("unflagged-subkey@kestra.io")))
@@ -161,41 +161,41 @@ class EncryptKeySelectionTest {
 
     @Test
     void newerSecondaryUserIdDoesNotOverridePrimaryUserIdFlags() throws Exception {
-        Date created = new Date(System.currentTimeMillis() - 60_000);
-        PGPKeyPair primary = rsaKeyPair(created);
-        PGPSignatureSubpacketGenerator primaryUserId = new PGPSignatureSubpacketGenerator();
+        var created = new Date(System.currentTimeMillis() - 60_000);
+        var primary = rsaKeyPair(created);
+        var primaryUserId = new PGPSignatureSubpacketGenerator();
         primaryUserId.setSignatureCreationTime(false, created);
         primaryUserId.setPrimaryUserID(false, true);
         primaryUserId.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA | KeyFlags.ENCRYPT_COMMS | KeyFlags.ENCRYPT_STORAGE);
-        PGPPublicKeyRing keyRing = keyRingGenerator(primary, "primary-uid@kestra.io", primaryUserId.generate()).generatePublicKeyRing();
+        var keyRing = keyRingGenerator(primary, "primary-uid@kestra.io", primaryUserId.generate()).generatePublicKeyRing();
 
-        PGPSignatureSubpacketGenerator secondaryUserId = new PGPSignatureSubpacketGenerator();
+        var secondaryUserId = new PGPSignatureSubpacketGenerator();
         secondaryUserId.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA);
         keyRing = withUserIdSignature(keyRing, primary, "secondary-uid@kestra.io", PGPSignature.POSITIVE_CERTIFICATION, secondaryUserId.generate());
 
-        URI encrypted = encrypt(keyRing, "primary-uid@kestra.io");
+        var encrypted = encrypt(keyRing, "primary-uid@kestra.io");
 
         assertThat(recipientKeyId(encrypted), is(primary.getKeyID()));
     }
 
     @Test
     void revokedUserIdDoesNotGrantEncryptionToSigningOnlyPrimary() throws Exception {
-        Date created = new Date(System.currentTimeMillis() - 60_000);
-        PGPKeyPair primary = rsaKeyPair(created);
-        PGPSignatureSubpacketGenerator signingOnly = new PGPSignatureSubpacketGenerator();
+        var created = new Date(System.currentTimeMillis() - 60_000);
+        var primary = rsaKeyPair(created);
+        var signingOnly = new PGPSignatureSubpacketGenerator();
         signingOnly.setSignatureCreationTime(false, created);
         signingOnly.setPrimaryUserID(false, true);
         signingOnly.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA);
-        PGPPublicKeyRing keyRing = keyRingGenerator(primary, "signing-only@kestra.io", signingOnly.generate()).generatePublicKeyRing();
+        var keyRing = keyRingGenerator(primary, "signing-only@kestra.io", signingOnly.generate()).generatePublicKeyRing();
 
-        PGPSignatureSubpacketGenerator olderCertification = new PGPSignatureSubpacketGenerator();
+        var olderCertification = new PGPSignatureSubpacketGenerator();
         olderCertification.setSignatureCreationTime(false, new Date(created.getTime() + 1_000));
         olderCertification.setKeyFlags(false, KeyFlags.CERTIFY_OTHER | KeyFlags.SIGN_DATA);
         keyRing = withUserIdSignature(keyRing, primary, "revoked@kestra.io", PGPSignature.POSITIVE_CERTIFICATION, olderCertification.generate());
         keyRing = withUserIdSignature(keyRing, primary, "revoked@kestra.io", PGPSignature.CERTIFICATION_REVOCATION, null);
 
-        PGPPublicKeyRing finalKeyRing = keyRing;
-        PGPException exception = assertThrows(PGPException.class, () -> encrypt(finalKeyRing, "signing-only@kestra.io"));
+        var finalKeyRing = keyRing;
+        var exception = assertThrows(PGPException.class, () -> encrypt(finalKeyRing, "signing-only@kestra.io"));
         assertThat(exception.getMessage(), containsString("No usable encryption key"));
     }
 
@@ -205,20 +205,20 @@ class EncryptKeySelectionTest {
         try (InputStream in = PGPUtil.getDecoderStream(new ByteArrayInputStream(resource("rsa-subkey-key.pub").getBytes(StandardCharsets.US_ASCII)))) {
             keyRing = new PGPPublicKeyRing(in, new JcaKeyFingerprintCalculator());
         }
-        PGPPublicKey subkey = encryptionSubkey("rsa-subkey");
-        PGPPublicKey unboundSubkey = subkey;
+        var subkey = encryptionSubkey("rsa-subkey");
+        var unboundSubkey = subkey;
         for (PGPSignature binding : (Iterable<PGPSignature>) () -> subkey.getSignaturesOfType(PGPSignature.SUBKEY_BINDING)) {
             unboundSubkey = PGPPublicKey.removeCertification(unboundSubkey, binding);
         }
         keyRing = PGPPublicKeyRing.insertPublicKey(keyRing, unboundSubkey);
 
-        Encrypt encrypt = Encrypt.builder()
+        var encrypt = Encrypt.builder()
             .from(Property.ofValue(put(CONTENT).toString()))
             .key(Property.ofValue(armor(keyRing)))
             .recipients(Property.ofValue(Collections.singletonList("rsa-subkey@kestra.io")))
             .build();
 
-        PGPException exception = assertThrows(PGPException.class, () -> encrypt.run(runContextFactory.of()));
+        var exception = assertThrows(PGPException.class, () -> encrypt.run(runContextFactory.of()));
         assertThat(exception.getMessage(), containsString("No usable encryption key"));
     }
 
@@ -232,7 +232,7 @@ class EncryptKeySelectionTest {
     }
 
     private static PGPKeyPair rsaKeyPair(Date created) throws Exception {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        var generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         return new JcaPGPKeyPair(PublicKeyAlgorithmTags.RSA_GENERAL, generator.generateKeyPair(), created);
     }
@@ -252,7 +252,7 @@ class EncryptKeySelectionTest {
 
     private static PGPPublicKeyRing withUserIdSignature(PGPPublicKeyRing keyRing, PGPKeyPair primary, String userId, int signatureType, PGPSignatureSubpacketVector hashedSubpackets)
         throws Exception {
-        PGPSignatureGenerator generator = new PGPSignatureGenerator(
+        var generator = new PGPSignatureGenerator(
             new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.RSA_GENERAL, HashAlgorithmTags.SHA512),
             primary.getPublicKey()
         );
@@ -260,13 +260,13 @@ class EncryptKeySelectionTest {
         if (hashedSubpackets != null) {
             generator.setHashedSubpackets(hashedSubpackets);
         }
-        PGPSignature signature = generator.generateCertification(userId, primary.getPublicKey());
-        PGPPublicKey primaryKey = PGPPublicKey.addCertification(keyRing.getPublicKey(), userId, signature);
+        var signature = generator.generateCertification(userId, primary.getPublicKey());
+        var primaryKey = PGPPublicKey.addCertification(keyRing.getPublicKey(), userId, signature);
         return PGPPublicKeyRing.insertPublicKey(keyRing, primaryKey);
     }
 
     private static String armor(PGPPublicKeyRing keyRing) throws Exception {
-        ByteArrayOutputStream armored = new ByteArrayOutputStream();
+        var armored = new ByteArrayOutputStream();
         try (ArmoredOutputStream out = new ArmoredOutputStream(armored)) {
             keyRing.encode(out);
         }
@@ -308,14 +308,14 @@ class EncryptKeySelectionTest {
 
     private long recipientKeyId(URI encrypted) throws Exception {
         try (InputStream in = PGPUtil.getDecoderStream(storageInterface.get(TenantService.MAIN_TENANT, null, encrypted))) {
-            PGPEncryptedDataList encryptedDataList = (PGPEncryptedDataList) new JcaPGPObjectFactory(in).nextObject();
+            var encryptedDataList = (PGPEncryptedDataList) new JcaPGPObjectFactory(in).nextObject();
             return ((PGPPublicKeyEncryptedData) encryptedDataList.get(0)).getKeyID();
         }
     }
 
     private PGPPublicKey encryptionSubkey(String keyName) throws Exception {
         try (InputStream in = PGPUtil.getDecoderStream(new ByteArrayInputStream(resource(keyName + "-key.pub").getBytes(StandardCharsets.US_ASCII)))) {
-            PGPPublicKeyRing keyRing = new PGPPublicKeyRing(in, new JcaKeyFingerprintCalculator());
+            var keyRing = new PGPPublicKeyRing(in, new JcaKeyFingerprintCalculator());
             var keys = keyRing.getPublicKeys();
             keys.next();
             return keys.next();
