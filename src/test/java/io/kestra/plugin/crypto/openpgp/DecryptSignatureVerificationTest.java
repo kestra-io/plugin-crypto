@@ -61,6 +61,7 @@ import jakarta.inject.Inject;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Reproduces https://github.com/kestra-io/plugin-crypto/issues/117: {@link Decrypt} silently
@@ -594,6 +595,82 @@ class DecryptSignatureVerificationTest {
             .build();
 
         assertThrows(PGPException.class, () -> decrypt.run(runContext));
+    }
+
+    /**
+     * Builds a signed and encrypted message whose one-pass header announces {@code opsType} while the trailing
+     * signature packet is of {@code sigType}, over {@code signed}, with {@code literal} as the delivered content.
+     */
+    private static byte[] mismatchedTypeMessage(String encPub, SubkeySigningMaterial m, int opsType, int sigType,
+        byte[] literal, byte[] signed) throws Exception {
+        AbstractPgp.addProvider();
+        PGPPublicKeyRingCollection rings;
+        try (var in = PGPUtil.getDecoderStream(new ByteArrayInputStream(encPub.getBytes(StandardCharsets.UTF_8)))) {
+            rings = new PGPPublicKeyRingCollection(in, new JcaKeyFingerprintCalculator());
+        }
+        PGPPublicKey encKey = rings.getKeyRings().next().getPublicKey();
+        var sb = new JcaPGPContentSignerBuilder(m.signingSecretKey().getPublicKey().getAlgorithm(), PGPUtil.SHA256);
+        var opsGen = new PGPSignatureGenerator(sb, m.signingSecretKey().getPublicKey());
+        opsGen.init(opsType, m.signingPrivateKey());
+        var sigGen = new PGPSignatureGenerator(new JcaPGPContentSignerBuilder(m.signingSecretKey().getPublicKey().getAlgorithm(), PGPUtil.SHA256), m.signingSecretKey().getPublicKey());
+        sigGen.init(sigType, m.signingPrivateKey());
+        sigGen.update(signed);
+        var out = new ByteArrayOutputStream();
+        try (var armored = new ArmoredOutputStream(out)) {
+            var encGen = new PGPEncryptedDataGenerator(
+                new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
+                    .setWithIntegrityPacket(true).setSecureRandom(new SecureRandom())
+            );
+            encGen.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(encKey));
+            try (OutputStream encOut = encGen.open(armored, new byte[4096])) {
+                opsGen.generateOnePassVersion(false).encode(encOut);
+                var lg = new PGPLiteralDataGenerator();
+                try (var lo = lg.open(encOut, PGPLiteralData.BINARY, "data", new Date(), new byte[4096])) {
+                    lo.write(literal);
+                }
+                sigGen.generate().encode(encOut);
+            }
+        }
+        return out.toByteArray();
+    }
+
+    private Decrypt decryptVerifying(int opsType, int sigType, byte[] literal, byte[] signed) throws Exception {
+        var m = buildKeyRingWithDedicatedSigningSubkey("Signer <signer@lab.test>", "p".toCharArray());
+        var msg = mismatchedTypeMessage(readResource("pgp/contact-key.pub"), m, opsType, sigType, literal, signed);
+        return Decrypt.builder()
+            .from(Property.ofValue(storeFile(msg).toString()))
+            .privateKey(Property.ofValue(readResource("pgp/contact-key.sec")))
+            .privateKeyPassphrase(Property.ofValue("abc456"))
+            .signUsersKey(Property.ofValue(Collections.singletonList(m.armoredPublicKey())))
+            .requiredSignerUsers(Property.ofValue(Collections.singletonList("signer@lab.test")))
+            .build();
+    }
+
+    @Test
+    void shouldRejectWhenOnePassTypeDiffersFromSignatureType() throws Exception {
+        // Given - a BINARY document signature over CRLF content, re-framed behind a TEXT one-pass header with the
+        // CRLFs rewritten: the one-pass type drives canonicalization, so the hash still matched before the fix
+        byte[] signed = "id,amount\r\n1,10\r\n2,20\r\n".getBytes(StandardCharsets.US_ASCII);
+        byte[] rewritten = "id,amount\n1,10\n2,20\n".getBytes(StandardCharsets.US_ASCII);
+        var decrypt = decryptVerifying(PGPSignature.CANONICAL_TEXT_DOCUMENT, PGPSignature.BINARY_DOCUMENT, rewritten, signed);
+
+        // When / Then
+        var e = assertThrows(PGPException.class, () -> decrypt.run(runContextFactory.of()));
+        assertTrue(e.getMessage().contains("does not match signature type"), e.getMessage());
+    }
+
+    @Test
+    void shouldAcceptTextSignatureWhenOnePassTypeMatches() throws Exception {
+        // Given - a genuine text signature: one-pass and signature both CANONICAL_TEXT_DOCUMENT
+        byte[] signed = "id,amount\r\n1,10\r\n2,20\r\n".getBytes(StandardCharsets.US_ASCII);
+        byte[] lf = "id,amount\n1,10\n2,20\n".getBytes(StandardCharsets.US_ASCII);
+        var decrypt = decryptVerifying(PGPSignature.CANONICAL_TEXT_DOCUMENT, PGPSignature.CANONICAL_TEXT_DOCUMENT, lf, signed);
+
+        // When
+        var output = decrypt.run(runContextFactory.of());
+
+        // Then
+        assertArrayEquals(lf, IOUtils.toByteArray(storageInterface.get(TenantService.MAIN_TENANT, null, output.getUri())));
     }
 
 }

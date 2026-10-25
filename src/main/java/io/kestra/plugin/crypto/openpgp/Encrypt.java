@@ -7,7 +7,15 @@ import java.security.SecureRandom;
 import java.util.*;
 
 import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.bcpg.HashAlgorithmTags;
+import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
+import org.bouncycastle.bcpg.SignatureSubpacketTags;
+import org.bouncycastle.bcpg.sig.KeyFlags;
 import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.api.OpenPGPCertificate;
+import org.bouncycastle.openpgp.api.OpenPGPDefaultPolicy;
+import org.bouncycastle.openpgp.api.OpenPGPPolicy;
+import org.bouncycastle.openpgp.api.jcajce.JcaOpenPGPImplementation;
 import org.bouncycastle.openpgp.operator.PGPContentSignerBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.*;
 
@@ -30,7 +38,11 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @Schema(
     title = "Encrypt and optionally sign files with OpenPGP",
-    description = "Streams a Kestra-stored file through ASCII-armored PGP encryption (AES-256 with integrity) and returns the storage URI. Optionally signs the payload when a private key and passphrase are provided; only the first public key in `key` is used for encryption."
+    description = """
+        Streams a Kestra-stored file through ASCII-armored PGP encryption (AES-256 with integrity) and returns the storage URI.
+        Optionally signs the payload when a private key and passphrase are provided; only the first key ring in `key` is used,
+        and its valid encryption subkey is preferred over the primary key.
+        """
 )
 @Plugin(
     examples = {
@@ -84,6 +96,12 @@ import lombok.experimental.SuperBuilder;
     }
 )
 public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output> {
+    private static final OpenPGPPolicy KEY_POLICY = new OpenPGPDefaultPolicy()
+        .acceptPublicKeyAlgorithmWithMinimalStrength(PublicKeyAlgorithmTags.RSA_GENERAL, 1024)
+        .acceptPublicKeyAlgorithmWithMinimalStrength(PublicKeyAlgorithmTags.ELGAMAL_ENCRYPT, 1024)
+        .acceptPublicKeyAlgorithmWithMinimalStrength(PublicKeyAlgorithmTags.DSA, 1024)
+        .acceptCertificationSignatureHashAlgorithm(HashAlgorithmTags.SHA1);
+
     @Schema(
         title = "Source file to encrypt",
         description = "Kestra internal storage URI or templated path to the cleartext file."
@@ -93,7 +111,10 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
 
     @Schema(
         title = "Public key for encryption",
-        description = "ASCII-armored export such as `gpg --export -a`; the first key ring found is used."
+        description = """
+            ASCII-armored export such as `gpg --export -a`; the first key ring found is used,
+            encrypting to its valid encryption subkey or, if it has none, to its primary key.
+            """
     )
     @PluginProperty(group = "connection")
     private Property<String> key;
@@ -155,7 +176,7 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
             pubKeyRings = new PGPPublicKeyRingCollection(pubKeyIn, new JcaKeyFingerprintCalculator());
         }
 
-        PGPPublicKey encryptionKey = pubKeyRings.getKeyRings().next().getPublicKey();
+        var encryptionKey = encryptionKey(pubKeyRings.getKeyRings().next());
 
         PGPSignatureGenerator signatureGenerator = null;
         if (this.signPrivateKey != null) {
@@ -262,6 +283,40 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         }
 
         return matches.getFirst();
+    }
+
+    private static PGPPublicKey encryptionKey(PGPPublicKeyRing keyRing) throws PGPException {
+        var now = new Date();
+        var encryptionKeys = new OpenPGPCertificate(keyRing, new JcaOpenPGPImplementation(), KEY_POLICY).getValidKeys(now).stream()
+            .filter(key -> key.getPGPPublicKey().isEncryptionKey() && KEY_POLICY.isAcceptableEncryptionKey(key.getPGPPublicKey()) && allowsEncryption(key, now))
+            .toList();
+
+        return encryptionKeys.stream()
+            .filter(key -> !key.isPrimaryKey())
+            .findFirst()
+            .or(() -> encryptionKeys.stream().findFirst())
+            .map(OpenPGPCertificate.OpenPGPComponentKey::getPGPPublicKey)
+            .orElseThrow(
+                () -> new PGPException(
+                    "No usable encryption key found in the first key ring of `key`: it may be expired or revoked, have no encryption key, "
+                        + "or use an algorithm or key size that is not accepted. Check it with `gpg --show-keys`, then renew or replace it."
+                )
+            );
+    }
+
+    private static boolean allowsEncryption(OpenPGPCertificate.OpenPGPComponentKey key, Date now) {
+        if (key.isPrimaryKey()) {
+            var keyFlags = key.getKeyFlags(now);
+            return keyFlags == null || hasEncryptionFlag(keyFlags.getFlags());
+        }
+
+        var binding = key.getLatestSelfSignature(now);
+        var hashed = binding == null ? null : binding.getSignature().getHashedSubPackets();
+        return hashed == null || !hashed.hasSubpacket(SignatureSubpacketTags.KEY_FLAGS) || hasEncryptionFlag(hashed.getKeyFlags());
+    }
+
+    private static boolean hasEncryptionFlag(int flags) {
+        return (flags & (KeyFlags.ENCRYPT_COMMS | KeyFlags.ENCRYPT_STORAGE)) != 0;
     }
 
     @Builder
