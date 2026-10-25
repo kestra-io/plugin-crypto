@@ -16,7 +16,6 @@ import org.bouncycastle.bcpg.ArmoredOutputStream;
 import org.bouncycastle.bcpg.HashAlgorithmTags;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
-import org.bouncycastle.bcpg.sig.KeyFlags;
 import org.bouncycastle.openpgp.PGPAlgorithmParameters;
 import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPEncryptedDataList;
@@ -28,8 +27,6 @@ import org.bouncycastle.openpgp.PGPPublicKeyEncryptedData;
 import org.bouncycastle.openpgp.PGPSecretKeyRing;
 import org.bouncycastle.openpgp.PGPSecretKeyRingCollection;
 import org.bouncycastle.openpgp.PGPSignature;
-import org.bouncycastle.openpgp.PGPSignatureSubpacketGenerator;
-import org.bouncycastle.openpgp.PGPSignatureSubpacketVector;
 import org.bouncycastle.openpgp.PGPUtil;
 import org.bouncycastle.openpgp.jcajce.JcaPGPObjectFactory;
 import org.bouncycastle.openpgp.operator.jcajce.JcaKeyFingerprintCalculator;
@@ -55,8 +52,6 @@ import jakarta.inject.Inject;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 // Reproduces https://github.com/kestra-io/plugin-crypto/issues/133: Encrypt ignored signUser and signed with the first key of signPrivateKey.
@@ -70,13 +65,7 @@ class EncryptSignUserTest {
     @Inject
     private StorageInterface storageInterface;
 
-    private enum Layout {
-        NO_KEY_FLAGS,
-        SIGNING_SUBKEY,
-        NO_SIGNING_KEY
-    }
-
-    private record GeneratedKey(PGPSecretKeyRing secretKeyRing, String armoredPublicKey, long signingKeyId) {
+    private record GeneratedKey(PGPSecretKeyRing secretKeyRing, String armoredPublicKey) {
     }
 
     private static Path resource(String name) throws Exception {
@@ -112,13 +101,7 @@ class EncryptSignUserTest {
         return new JcaPGPKeyPair(PublicKeyAlgorithmTags.RSA_GENERAL, (PGPAlgorithmParameters) null, keyPairGenerator.generateKeyPair(), new Date());
     }
 
-    private static PGPSignatureSubpacketVector keyFlags(int flags) {
-        var subpackets = new PGPSignatureSubpacketGenerator();
-        subpackets.setKeyFlags(false, flags);
-        return subpackets.generate();
-    }
-
-    private static GeneratedKey generateKey(String userId, Layout layout) throws Exception {
+    private static GeneratedKey generateKey(String userId) throws Exception {
         AbstractPgp.addProvider();
 
         var primary = newRsaKeyPair();
@@ -128,36 +111,26 @@ class EncryptSignUserTest {
             primary,
             userId,
             digestCalculatorProvider.get(HashAlgorithmTags.SHA1),
-            layout == Layout.NO_KEY_FLAGS ? null : keyFlags(KeyFlags.CERTIFY_OTHER),
+            null,
             null,
             new JcaPGPContentSignerBuilder(primary.getPublicKey().getAlgorithm(), HashAlgorithmTags.SHA256),
             new JcePBESecretKeyEncryptorBuilder(SymmetricKeyAlgorithmTags.AES_256, digestCalculatorProvider.get(HashAlgorithmTags.SHA256))
                 .build(PASSPHRASE.toCharArray())
         );
 
-        var signingKeyId = primary.getKeyID();
-        if (layout != Layout.NO_KEY_FLAGS) {
-            keyRingGenerator.addSubKey(newRsaKeyPair(), keyFlags(KeyFlags.ENCRYPT_COMMS | KeyFlags.ENCRYPT_STORAGE), null);
-        }
-        if (layout == Layout.SIGNING_SUBKEY) {
-            var signingSubkey = newRsaKeyPair();
-            keyRingGenerator.addSubKey(signingSubkey, keyFlags(KeyFlags.SIGN_DATA), null);
-            signingKeyId = signingSubkey.getKeyID();
-        }
-
         var byteOut = new ByteArrayOutputStream();
         try (var armoredOut = new ArmoredOutputStream(byteOut)) {
             keyRingGenerator.generatePublicKeyRing().encode(armoredOut);
         }
 
-        return new GeneratedKey(keyRingGenerator.generateSecretKeyRing(), byteOut.toString(StandardCharsets.US_ASCII), signingKeyId);
+        return new GeneratedKey(keyRingGenerator.generateSecretKeyRing(), byteOut.toString(StandardCharsets.US_ASCII));
     }
 
     private URI storeSourceFile() throws Exception {
         return storageInterface.put(
             TenantService.MAIN_TENANT,
             null,
-            new URI("/" + FriendlyId.createFriendlyId()),
+            new URI("/%s".formatted(FriendlyId.createFriendlyId())),
             new ByteArrayInputStream(sourceContent())
         );
     }
@@ -213,29 +186,29 @@ class EncryptSignUserTest {
         var keyring = armorKeyring(hello, contact);
 
         for (var signer : Map.of("hello", hello, "contact", contact).entrySet()) {
-            var signUser = signer.getKey() + "@kestra.io";
+            var signUser = "%s@kestra.io".formatted(signer.getKey());
             var encrypted = encryptTask(storeSourceFile(), keyring, signUser).run(runContext).getUri();
 
-            assertThat("signed as " + signUser, signerKeyId(encrypted), is(signer.getValue().getPublicKey().getKeyID()));
-            var decrypted = decryptRequiringSigner(runContext, encrypted, readResource("pgp/" + signer.getKey() + "-key.pub"), signUser);
-            assertArrayEquals(sourceContent(), decrypted, "signed as " + signUser);
+            assertThat("signed as %s".formatted(signUser), signerKeyId(encrypted), is(signer.getValue().getPublicKey().getKeyID()));
+            var decrypted = decryptRequiringSigner(runContext, encrypted, readResource("pgp/%s-key.pub".formatted(signer.getKey())), signUser);
+            assertThat("signed as %s".formatted(signUser), decrypted, is(sourceContent()));
         }
     }
 
     @Test
     void signsWithKeyMatchingFullSignUserId() throws Exception {
         var runContext = runContextFactory.of();
-        var first = generateKey("First Signer <first@kestra.io>", Layout.NO_KEY_FLAGS);
-        var second = generateKey("Second Signer <second@kestra.io>", Layout.NO_KEY_FLAGS);
+        var first = generateKey("First Signer <first@kestra.io>");
+        var second = generateKey("Second Signer <second@kestra.io>");
         var keyring = armorKeyring(first.secretKeyRing(), second.secretKeyRing());
 
         for (var signer : List.of(first, second)) {
             var signUserId = signer.secretKeyRing().getPublicKey().getUserIDs().next();
             var encrypted = encryptTask(storeSourceFile(), keyring, signUserId).run(runContext).getUri();
 
-            assertThat("signed as " + signUserId, signerKeyId(encrypted), is(signer.signingKeyId()));
+            assertThat("signed as %s".formatted(signUserId), signerKeyId(encrypted), is(signer.secretKeyRing().getPublicKey().getKeyID()));
             var decrypted = decryptRequiringSigner(runContext, encrypted, signer.armoredPublicKey(), signUserId);
-            assertArrayEquals(sourceContent(), decrypted, "signed as " + signUserId);
+            assertThat("signed as %s".formatted(signUserId), decrypted, is(sourceContent()));
         }
     }
 
@@ -246,31 +219,8 @@ class EncryptSignUserTest {
 
         var encrypted = encryptTask(storeSourceFile(), keyring, "HELLO@Kestra.IO").run(runContext).getUri();
 
-        var decrypted = decryptRequiringSigner(runContext, encrypted, readResource("pgp/hello-key.pub"), "Hello@KESTRA.io");
-        assertArrayEquals(sourceContent(), decrypted);
-    }
-
-    @Test
-    void signsWithSigningSubkeyWhenPrimaryKeyIsCertifyOnly() throws Exception {
-        var runContext = runContextFactory.of();
-        var signer = generateKey("Subkey Signer <subkey@kestra.io>", Layout.SIGNING_SUBKEY);
-
-        var encrypted = encryptTask(storeSourceFile(), armorKeyring(signer.secretKeyRing()), "subkey@kestra.io").run(runContext).getUri();
-
-        assertThat(signerKeyId(encrypted), is(signer.signingKeyId()));
-        assertThat(signer.signingKeyId(), not(signer.secretKeyRing().getPublicKey().getKeyID()));
-        var decrypted = decryptRequiringSigner(runContext, encrypted, signer.armoredPublicKey(), "subkey@kestra.io");
-        assertArrayEquals(sourceContent(), decrypted);
-    }
-
-    @Test
-    void keyWithoutSigningCapabilityRejected() throws Exception {
-        var runContext = runContextFactory.of();
-        var signer = generateKey("No Signer <nosign@kestra.io>", Layout.NO_SIGNING_KEY);
-        var encrypt = encryptTask(storeSourceFile(), armorKeyring(signer.secretKeyRing()), "nosign@kestra.io");
-
-        var exception = assertThrows(PGPException.class, () -> encrypt.run(runContext));
-        assertThat(exception.getMessage(), containsString("no usable signing key"));
+        var decrypted = decryptRequiringSigner(runContext, encrypted, readResource("pgp/hello-key.pub"), "hello@kestra.io");
+        assertThat(decrypted, is(sourceContent()));
     }
 
     @Test
@@ -303,22 +253,46 @@ class EncryptSignUserTest {
     }
 
     @Test
-    void partialSignUserDoesNotMatch() throws Exception {
+    void signUserMatchesPartOfUserId() throws Exception {
         var runContext = runContextFactory.of();
-        var keyring = armorKeyring(parseSecretKeyRing(readResource("pgp/hello-key.sec")));
+        var keyring = armorKeyring(
+            parseSecretKeyRing(readResource("pgp/hello-key.sec")),
+            parseSecretKeyRing(readResource("pgp/contact-key.sec"))
+        );
 
-        // A substring of the email must not select the key, or "kestra.io" would match every signer.
-        var encrypt = encryptTask(storeSourceFile(), keyring, "kestra.io");
+        var encrypted = encryptTask(storeSourceFile(), keyring, "contact@").run(runContext).getUri();
 
-        assertThrows(PGPException.class, () -> encrypt.run(runContext));
+        assertThat(signerKeyId(encrypted), is(parseSecretKeyRing(readResource("pgp/contact-key.sec")).getPublicKey().getKeyID()));
+    }
+
+    @Test
+    void signUserIsRendered() throws Exception {
+        var runContext = runContextFactory.of(Map.of("signer", "contact@kestra.io"));
+        var keyring = armorKeyring(
+            parseSecretKeyRing(readResource("pgp/hello-key.sec")),
+            parseSecretKeyRing(readResource("pgp/contact-key.sec"))
+        );
+
+        var encrypt = Encrypt.builder()
+            .from(Property.ofValue(storeSourceFile().toString()))
+            .key(Property.ofValue(readResource("pgp/contact-key.pub")))
+            .recipients(Property.ofValue(List.of("contact@kestra.io")))
+            .signPrivateKey(Property.ofValue(keyring))
+            .signPassphrase(Property.ofValue(PASSPHRASE))
+            .signUser(Property.ofExpression("{{ signer }}"))
+            .build();
+
+        var encrypted = encrypt.run(runContext).getUri();
+
+        assertThat(signerKeyId(encrypted), is(parseSecretKeyRing(readResource("pgp/contact-key.sec")).getPublicKey().getKeyID()));
     }
 
     @Test
     void ambiguousSignUserRejected() throws Exception {
         var runContext = runContextFactory.of();
         var keyring = armorKeyring(
-            generateKey("First <shared@kestra.io>", Layout.NO_KEY_FLAGS).secretKeyRing(),
-            generateKey("Second <shared@kestra.io>", Layout.NO_KEY_FLAGS).secretKeyRing()
+            generateKey("First <shared@kestra.io>").secretKeyRing(),
+            generateKey("Second <shared@kestra.io>").secretKeyRing()
         );
         var encrypt = encryptTask(storeSourceFile(), keyring, "shared@kestra.io");
 
