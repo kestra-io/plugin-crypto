@@ -152,7 +152,10 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
 
     @Schema(
         title = "User ID bound to the signature",
-        description = "Required when signing; identifies the signing key within the secret key ring."
+        description = """
+            Required when `signPrivateKey` is set. Selects the key in `signPrivateKey` whose user ID contains this value, ignoring case, e.g. `signer@kestra.io`.
+            The task fails if no key or several keys match. The primary key of the matching key ring signs the file.
+            """
     )
     @PluginProperty(group = "advanced")
     private Property<String> signUser;
@@ -176,13 +179,18 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         var encryptionKey = encryptionKey(pubKeyRings.getKeyRings().next());
 
         PGPSignatureGenerator signatureGenerator = null;
-        if (this.signPrivateKey != null && this.signUser != null) {
+        if (this.signPrivateKey != null) {
             var rSignPrivateKey = runContext.render(this.signPrivateKey).as(String.class).orElseThrow();
             var rSignPassphrase = runContext.render(this.signPassphrase).as(String.class).orElse("").toCharArray();
+            var rSignUser = runContext.render(this.signUser).as(String.class)
+                .filter(user -> !user.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("'signUser' is required when 'signPrivateKey' is set, to select the signing key"));
 
-            InputStream privKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(rSignPrivateKey.getBytes(StandardCharsets.UTF_8)));
-            var secretKeyRings = new PGPSecretKeyRingCollection(privKeyIn, new JcaKeyFingerprintCalculator());
-            PGPSecretKey signingSecretKey = secretKeyRings.getKeyRings().next().getSecretKey();
+            PGPSecretKeyRingCollection secretKeyRings;
+            try (var privKeyIn = PGPUtil.getDecoderStream(new ByteArrayInputStream(rSignPrivateKey.getBytes(StandardCharsets.UTF_8)))) {
+                secretKeyRings = new PGPSecretKeyRingCollection(privKeyIn, new JcaKeyFingerprintCalculator());
+            }
+            var signingSecretKey = findSigningKeyRing(secretKeyRings, rSignUser).getSecretKey();
             PGPPrivateKey signingPrivateKey = signingSecretKey.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder().build(rSignPassphrase));
 
             PGPContentSignerBuilder signerBuilder = new JcaPGPContentSignerBuilder(
@@ -243,6 +251,38 @@ public class Encrypt extends AbstractPgp implements RunnableTask<Encrypt.Output>
         return Output.builder()
             .uri(uri)
             .build();
+    }
+
+    // Several matches fail instead of falling back to keyring order, so the signer is never chosen silently.
+    private static PGPSecretKeyRing findSigningKeyRing(PGPSecretKeyRingCollection secretKeyRings, String signUser) throws PGPException {
+        var expected = signUser.toLowerCase(Locale.ROOT);
+        var matches = new ArrayList<PGPSecretKeyRing>();
+        var availableUserIds = new ArrayList<String>();
+
+        for (var ring : secretKeyRings) {
+            var ringUserIds = new ArrayList<String>();
+            ring.getPublicKey().getUserIDs().forEachRemaining(ringUserIds::add);
+            availableUserIds.addAll(ringUserIds);
+
+            if (ringUserIds.stream().anyMatch(userId -> userId.toLowerCase(Locale.ROOT).contains(expected))) {
+                matches.add(ring);
+            }
+        }
+
+        if (matches.isEmpty()) {
+            throw new PGPException("No secret key in 'signPrivateKey' has a user ID containing signUser '%s'. Available user IDs: %s".formatted(signUser, availableUserIds));
+        }
+
+        if (matches.size() > 1) {
+            var keyIds = matches.stream()
+                .map(ring -> "%016X".formatted(ring.getPublicKey().getKeyID()))
+                .toList();
+            throw new PGPException(
+                "signUser '%s' matches several secret keys in 'signPrivateKey' %s. Use a more specific signUser or provide only the intended key.".formatted(signUser, keyIds)
+            );
+        }
+
+        return matches.getFirst();
     }
 
     private static PGPPublicKey encryptionKey(PGPPublicKeyRing keyRing) throws PGPException {

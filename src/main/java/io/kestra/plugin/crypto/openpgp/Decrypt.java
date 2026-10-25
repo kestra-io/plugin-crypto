@@ -286,7 +286,7 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                         if (signatureType != PGPSignature.BINARY_DOCUMENT && signatureType != PGPSignature.CANONICAL_TEXT_DOCUMENT) {
                             throw new PGPException(
                                 "Signature is not a document signature (type 0x" + Integer.toHexString(signatureType) +
-                                "); refusing to treat it as proof the signer sent this file"
+                                    "); refusing to treat it as proof the signer sent this file"
                             );
                         }
 
@@ -295,8 +295,10 @@ public class Decrypt extends AbstractPgp implements RunnableTask<Decrypt.Output>
                         // behind a text one-pass header would let CRLFs be rewritten while still verifying, so the
                         // two types must agree.
                         if (sig.getSignatureType() != signatureType) {
-                            throw new PGPException("One-pass signature type 0x" + Integer.toHexString(sig.getSignatureType())
-                                + " does not match signature type 0x" + Integer.toHexString(signatureType));
+                            throw new PGPException(
+                                "One-pass signature type 0x" + Integer.toHexString(sig.getSignatureType())
+                                    + " does not match signature type 0x" + Integer.toHexString(signatureType)
+                            );
                         }
 
                         if (!rRequiredSignerUsers.isEmpty()) {

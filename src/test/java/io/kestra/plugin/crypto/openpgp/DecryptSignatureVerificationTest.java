@@ -24,7 +24,7 @@ import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
 import org.bouncycastle.openpgp.PGPEncryptedData;
 import org.bouncycastle.openpgp.PGPEncryptedDataGenerator;
-import org.bouncycastle.openpgp.PGPKeyPair;
+import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKeyRingGenerator;
 import org.bouncycastle.openpgp.PGPLiteralData;
 import org.bouncycastle.openpgp.PGPLiteralDataGenerator;
@@ -53,13 +53,11 @@ import com.devskiller.friendly_id.FriendlyId;
 
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
 import io.kestra.core.tenant.TenantService;
 
 import jakarta.inject.Inject;
-import org.bouncycastle.openpgp.PGPException;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -110,8 +108,7 @@ class DecryptSignatureVerificationTest {
         PGPSecretKey signingSecretKey,
         PGPPrivateKey signingPrivateKey,
         byte[] literalContent,
-        byte[] signedContent
-    ) throws Exception {
+        byte[] signedContent) throws Exception {
         AbstractPgp.addProvider();
 
         PGPPublicKeyRingCollection pubKeyRings;
@@ -166,8 +163,7 @@ class DecryptSignatureVerificationTest {
         PGPPrivateKey signingPrivateKey,
         byte[] literalContent,
         byte[] signedContent,
-        int signatureType
-    ) throws Exception {
+        int signatureType) throws Exception {
         AbstractPgp.addProvider();
 
         PGPPublicKeyRingCollection pubKeyRings;
@@ -216,8 +212,7 @@ class DecryptSignatureVerificationTest {
         String signingSecretKeyArmored,
         char[] signingPassphrase,
         byte[] literalContent,
-        byte[] signedContent
-    ) throws Exception {
+        byte[] signedContent) throws Exception {
         AbstractPgp.addProvider();
 
         PGPSecretKeyRingCollection secretKeyRings;
@@ -602,13 +597,12 @@ class DecryptSignatureVerificationTest {
         assertThrows(PGPException.class, () -> decrypt.run(runContext));
     }
 
-
     /**
      * Builds a signed and encrypted message whose one-pass header announces {@code opsType} while the trailing
      * signature packet is of {@code sigType}, over {@code signed}, with {@code literal} as the delivered content.
      */
     private static byte[] mismatchedTypeMessage(String encPub, SubkeySigningMaterial m, int opsType, int sigType,
-                                      byte[] literal, byte[] signed) throws Exception {
+        byte[] literal, byte[] signed) throws Exception {
         AbstractPgp.addProvider();
         PGPPublicKeyRingCollection rings;
         try (var in = PGPUtil.getDecoderStream(new ByteArrayInputStream(encPub.getBytes(StandardCharsets.UTF_8)))) {
@@ -623,8 +617,10 @@ class DecryptSignatureVerificationTest {
         sigGen.update(signed);
         var out = new ByteArrayOutputStream();
         try (var armored = new ArmoredOutputStream(out)) {
-            var encGen = new PGPEncryptedDataGenerator(new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
-                .setWithIntegrityPacket(true).setSecureRandom(new SecureRandom()));
+            var encGen = new PGPEncryptedDataGenerator(
+                new JcePGPDataEncryptorBuilder(PGPEncryptedData.AES_256)
+                    .setWithIntegrityPacket(true).setSecureRandom(new SecureRandom())
+            );
             encGen.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(encKey));
             try (OutputStream encOut = encGen.open(armored, new byte[4096])) {
                 opsGen.generateOnePassVersion(false).encode(encOut);
